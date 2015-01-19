@@ -1,0 +1,10 @@
+#!/bin/bash
+
+if [ ! -f large.8.goliblink.in ]; then
+	gunzip < large.8.goliblink.in.gz > large.8.goliblink.in
+fi
+
+#go1.4 build -o main14 main.go
+#GOARCH=386 GOHOSTARCH=386 time ./main14 large.8.goliblink.in large.8 7059045
+go build main.go
+GOARCH=386 GOHOSTARCH=386 GODEBUG=gccheckmark=0,gctrace=1 time ./main large.8.goliblink.in large.8 7059045
