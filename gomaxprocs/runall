@@ -1,0 +1,37 @@
+#!/bin/bash
+
+list="$@"
+if [ "$list" = "" ]; then
+	list="1 2 4"
+fi
+
+for i in go1.1 go1.2 go1.3 go1.4
+do
+	for j in chain powser sieve
+	do
+		if [ ! -f $j.test.$i ]; then
+			$i test -c ./$j && mv $j.test $j.test.$i
+		fi
+	done
+done
+
+rev=$(cd $(go env GOROOT) && git log -n1 |grep commit | awk '{print substr($2, 0, 7)}')
+for j in chain powser sieve
+do
+	if [ ! -f $j.test.$rev ]; then
+		$i test -c ./$j && mv $j.test $j.test.$rev
+	fi
+done
+
+set -x
+for i in go1.1 go1.2 go1.3 go1.4 $rev
+do
+	for j in chain powser sieve
+	do
+		for p in $list
+		do
+			GOMAXPROCS=$p ./$j.test.$i -test.bench=. 2>&1 | tee -a log.$i
+		done
+	done
+done
+
