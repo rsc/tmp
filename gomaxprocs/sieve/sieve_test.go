@@ -62,7 +62,7 @@ func BenchmarkSieve(b *testing.B) {
 			panic("fail")
 		}
 	}
-	for i := 0; i < 5000; i++ {
+	for i := 0; i < 10000; i++ {
 		<-primes
 	}
 }

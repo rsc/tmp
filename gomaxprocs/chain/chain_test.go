@@ -43,14 +43,14 @@ func copy1(from, to chan int) {
 	}
 }
 
-func BenchmarkGoroutineRing(b *testing.B) {
+func BenchmarkChain(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		cin <- 1
 		<-cout
 	}
 }
 
-func BenchmarkGoroutineRingBuf(b *testing.B) {
+func BenchmarkChainBuf(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		cinbuf <- 1
 		<-coutbuf

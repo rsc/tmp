@@ -19,19 +19,21 @@ rev=$(cd $(go env GOROOT) && git log -n1 |grep commit | awk '{print substr($2, 0
 for j in chain powser sieve
 do
 	if [ ! -f $j.test.$rev ]; then
-		$i test -c ./$j && mv $j.test $j.test.$rev
+		go test -c ./$j && mv $j.test $j.test.$rev
 	fi
 done
 
 set -x
-for i in go1.1 go1.2 go1.3 go1.4 $rev
+for k in $(seq 20)
 do
-	for j in chain powser sieve
+	for i in $rev go1.4 go1.3 go1.2 go1.1
 	do
-		for p in $list
+		for j in chain powser sieve
 		do
-			GOMAXPROCS=$p ./$j.test.$i -test.bench=. 2>&1 | tee -a log.$i
+			for p in $list
+			do
+				GOMAXPROCS=$p ./$j.test.$i -test.bench=. 2>&1 | tee -a log.$i
+			done
 		done
 	done
 done
-
