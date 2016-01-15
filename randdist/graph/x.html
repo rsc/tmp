@@ -1,0 +1,26 @@
+<base href="http://localhost:8000/">
+<h1>Graph of Pr(rand.Float64() < x) for various implementations</h1>
+<p>Russ Cox, January 2016</p>
+<p>&nbsp;
+<p>The blue line is ideal, Pr(rand.Float64() < x) = x. The red line is the analytically exact probability.
+<p>Make your browser wide enough to see four graphs across.
+Then the four columns show behavior very close to zero (scale 1/2^63), somewhat zoomed out from zero (scale 1/2^53), centered on 0.5 (scale 1/2^53), and close to one (scale 1/2^53).
+<p>Computed with <a href="https://rsc.io/tmp/randdist">rsc.io/tmp/randdist</a>.
+
+<h2>Go 1.1 behavior</h2>
+<img src="/graph?mode=0&x=3">
+<img src="/graph?mode=0&x=2">
+<img src="/graph?mode=0&x=0">
+<img src="/graph?mode=0&x=1">
+
+<h2>Go 1.5 behavior</h2>
+<img src="/graph?mode=1&x=3">
+<img src="/graph?mode=1&x=2">
+<img src="/graph?mode=1&x=0">
+<img src="/graph?mode=1&x=1">
+
+<h2>Go 1.6 behavior</h2>
+<img src="/graph?mode=2&x=3">
+<img src="/graph?mode=2&x=2">
+<img src="/graph?mode=2&x=0">
+<img src="/graph?mode=2&x=1">
