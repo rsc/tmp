@@ -157,6 +157,9 @@ func Parse(text []byte) (*Set, error) {
 				p.NewMode = m
 				continue
 			}
+			if _, ok := skip(l, "similarity index "); ok {
+				continue
+			}
 			if s, ok := skip(l, "rename from "); ok && len(s) > 0 {
 				p.Src = string(s)
 				p.Verb = Rename
@@ -215,6 +218,9 @@ func Parse(text []byte) (*Set, error) {
 				break
 			}
 			if hasPrefix(l, "index ") {
+				continue
+			}
+			if len(l) == 0 {
 				continue
 			}
 			return nil, SyntaxError("unexpected patch header line: " + string(l))

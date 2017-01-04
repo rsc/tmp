@@ -71,6 +71,9 @@ func ParseGitBinary(raw []byte) (Diff, error) {
 
 	for {
 		var first []byte
+		if len(raw) == 0 {
+			return nil, errors.New("missing Git binary patch header")
+		}
 		first, raw, _ = getLine(raw, 1)
 		first = bytes.TrimSpace(first)
 		if s, ok := skip(first, "index "); ok {
