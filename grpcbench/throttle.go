@@ -120,6 +120,9 @@ var (
 )
 
 func transfer(dir string, n int) {
+	if !*verbose {
+		return
+	}
 	mu.Lock()
 	t := fmt.Sprintf("%.3fs", time.Since(start).Seconds())
 	sep := "+"
