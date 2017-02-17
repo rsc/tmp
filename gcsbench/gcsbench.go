@@ -24,6 +24,7 @@ var (
 	parallel   = flag.Int("p", 1, "parallelism")
 	count      = flag.Int("n", 20, "number of writes")
 	newClient  = flag.Bool("newclient", false, "use new client for each write")
+	writeChunk = flag.Int("writechunk", 1<<20, "max size of write")
 )
 
 func main() {
@@ -67,7 +68,15 @@ func main() {
 			}
 			obj := client.Bucket(*bucketName).Object(name)
 			w := obj.NewWriter(ctx)
-			w.Write(make([]byte, *size))
+			buf := make([]byte, *size)
+			for len(buf) > 0 {
+				n := len(buf)
+				if n > *writeChunk {
+					n = *writeChunk
+				}
+				w.Write(buf[:n])
+				buf = buf[n:]
+			}
 			if err := w.Close(); err != nil {
 				log.Fatalf("writing file: %v", err)
 			}
