@@ -8,6 +8,11 @@
 // that tracks use of struct fields.
 // This information is computed at build time for struct fields marked
 // with the `go:"track"` tag. See http://go/fieldtrack for background.
+//
+// To test run:
+//
+//     GOEXPERIMENT=fieldtrack ./make.bash
+//     go test rsc.io/tmp/fieldtrack -ldflags=-k=rsc.io/tmp/fieldtrack.tracked
 package fieldtrack
 
 import (
