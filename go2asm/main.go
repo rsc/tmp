@@ -14,25 +14,7 @@
 //
 // Example
 //
-// To extract the assembly for the function math.IsNaN:
-//
-//	$ go build -a -v -gcflags -S math 2>&1 | go2asm -s math.IsNaN
-//	#include "funcdata.h"
-//
-//	TEXT math·IsNaN(SB), $0-16 // /Users/rsc/go/src/math/bits.go:31
-//		NO_LOCAL_POINTERS
-//		// FUNCDATA $0, gclocals·f207267fbf96a0178e8758c6e3e0ce28(SB) (args)
-//		// FUNCDATA $1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB) (no locals)
-//		MOVSD      f+0(FP), X0  // bits.go:36
-//		UCOMISD    X0, X0
-//		SETNE      CL
-//		SETPS      AL
-//		ORL        AX, CX
-//		MOVB       CL, is+8(FP)
-//		RET
-//	$
-//
-// Or to extract the assembly for a test program:
+// Extract the assembly for a test program:
 //
 //	$ cat /tmp/x.go
 //	package p
@@ -56,6 +38,40 @@
 //		SUBQ       CX, DX
 //		MOVQ       DX, y+8(FP)
 //		RET
+//	$
+//
+// Extract the assembly for the function math.IsInf:
+//
+//	$ go build -a -v -gcflags -S math 2>&1 | go2asm -s math.IsInf
+//	TEXT math·IsInf(SB), $0-24 // /Users/rsc/go/src/math/bits.go:43
+//		NO_LOCAL_POINTERS
+//		// FUNCDATA $0, gclocals·54241e171da8af6ae173d69da0236748(SB) (args)
+//		// FUNCDATA $1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB) (no locals)
+//		MOVQ       sign+8(FP), AX  // bits.go:48
+//		TESTQ      AX, AX
+//		JLT        pc66
+//		MOVSD      f+0(FP), X0
+//		MOVSD      $(1.7976931348623157e+308), X1
+//		UCOMISD    X1, X0
+//		JLS        pc40
+//		MOVL       $1, AX
+//	pc35:
+//		MOVB       AL, _r2+16(FP)
+//		RET
+//	pc40:
+//		TESTQ      AX, AX
+//	pc43:
+//		JGT        pc62
+//		MOVSD      $(-1.7976931348623157e+308), X1
+//		UCOMISD    X0, X1
+//		SETHI      AL
+//		JMP        pc35
+//	pc62:
+//		MOVL       $0, AX
+//		JMP        pc35
+//	pc66:
+//		MOVSD      f+0(FP), X0
+//		JMP        pc43
 //	$
 //
 // Bugs
