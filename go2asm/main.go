@@ -16,7 +16,47 @@
 //
 // To extract the assembly for the function math.IsNaN:
 //
-//	go build -a -v -gcflags -S math 2>&1 | go2asm -s math.IsNaN
+//	$ go build -a -v -gcflags -S math 2>&1 | go2asm -s math.IsNaN
+//	#include "funcdata.h"
+//
+//	TEXT math·IsNaN(SB), $0-16 // /Users/rsc/go/src/math/bits.go:31
+//		NO_LOCAL_POINTERS
+//		// FUNCDATA $0, gclocals·f207267fbf96a0178e8758c6e3e0ce28(SB) (args)
+//		// FUNCDATA $1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB) (no locals)
+//		MOVSD      f+0(FP), X0  // bits.go:36
+//		UCOMISD    X0, X0
+//		SETNE      CL
+//		SETPS      AL
+//		ORL        AX, CX
+//		MOVB       CL, is+8(FP)
+//		RET
+//	$
+//
+// Or to extract the assembly for a test program:
+//
+//	$ cat /tmp/x.go
+//	package p
+//
+//	func f(x int) (y int) {
+//		return x
+//	}
+//	$ go tool compile -S /tmp/x.go | go2asm
+//	#include "funcdata.h"
+//
+//	TEXT ·f(SB), $0-16 // /tmp/x.go:3
+//		NO_LOCAL_POINTERS
+//		// FUNCDATA $0, gclocals·f207267fbf96a0178e8758c6e3e0ce28(SB) (args)
+//		// FUNCDATA $1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB) (no locals)
+//		MOVQ       $-3689348814741910323, AX  // x.go:4
+//		MOVQ       x+0(FP), CX
+//		IMULQ      CX
+//		ADDQ       CX, DX
+//		SARQ       $3, DX
+//		SARQ       $63, CX
+//		SUBQ       CX, DX
+//		MOVQ       DX, y+8(FP)
+//		RET
+//	$
 //
 // Bugs
 //
@@ -115,7 +155,7 @@ func main() {
 		}
 		if m := startTextRE.FindStringSubmatch(line); m != nil {
 			sym = m[1]
-			if !symRE.MatchString(pkg + "." + sym) {
+			if !symRE.MatchString(pkg + "." + sym[3:]) {
 				continue
 			}
 			mode = "text"
@@ -123,7 +163,7 @@ func main() {
 		}
 		if m := startDataRE.FindStringSubmatch(line); m != nil {
 			sym = m[1]
-			if !symRE.MatchString(pkg + "." + sym) {
+			if !symRE.MatchString(pkg + "." + sym[3:]) {
 				continue
 			}
 			mode = "data"
@@ -340,6 +380,10 @@ func asmText(text []Inst) {
 	// Replace tab between opcode and args with spaces, to help mini-tabwriter below.
 	for i := range text {
 		inst := &text[i]
+		if i == 0 && strings.HasPrefix(inst.Asm, "TEXT\t") {
+			inst.Asm = "TEXT " + inst.Asm[5:]
+			continue
+		}
 		if i := strings.Index(inst.Asm, "\t"); i >= 0 {
 			spaces := ""
 			if i < 10 {
