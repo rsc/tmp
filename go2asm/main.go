@@ -20,7 +20,7 @@
 //	package p
 //
 //	func f(x int) (y int) {
-//		return x
+//		return x / 10
 //	}
 //	$ go tool compile -S /tmp/x.go | go2asm
 //	#include "funcdata.h"
