@@ -4,6 +4,12 @@
 
 package gammabench
 
+/*
+go1.6 build -a -gcflags -S math 2>&1 | go2asm -s math.Lgamma | sed 's/math·Lgamma/·Lgamma16/' >lgamma16.s
+go1.7 build -a -gcflags -S math 2>&1 | go2asm -s math.Lgamma | sed 's/math·Lgamma/·Lgamma17/' >lgamma17.s
+go build -a -gcflags -S math 2>&1 | go2asm -s math.Lgamma | sed 's/math·Lgamma/·LgammaZZZ/' >lgammazzz.s
+*/
+
 func Lgamma16(x float64) (lgamma float64, sign int)
-func Lgamma17(float64) (float64, int)
-func LgammaZZZ(float64) (float64, int)
+func Lgamma17(x float64) (lgamma float64, sign int)
+func LgammaZZZ(x float64) (lgamma float64, sign int)
