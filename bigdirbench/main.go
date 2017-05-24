@@ -30,10 +30,21 @@ func main() {
 	check(err)
 	check(os.Chdir(d))
 
-	jump := 1
 	for i := 0; i < *n; {
+		end := i + i/10
+		pow := 10
+		for pow*100 < end {
+			pow *= 10
+		}
+		end = end / pow * pow
+		if end > *n {
+			end = *n + 1
+		}
+		if end <= i {
+			end = i + 1
+		}
 		var name string
-		for j := 0; j < jump; j++ {
+		for ; i < end; i++ {
 			name = fmt.Sprintf("%032d", i)
 			f, err := os.Create(name)
 			check(err)
@@ -52,9 +63,6 @@ func main() {
 		f.Close()
 		dt2 := time.Since(t)
 		fmt.Printf("%d %.6f %.6f\n", i, dt.Seconds(), dt2.Seconds())
-		if jump*1000 <= i {
-			jump *= 10
-		}
 	}
 
 	check(os.Chdir(wd))
