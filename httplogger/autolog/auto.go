@@ -6,10 +6,13 @@ package autolog
 
 import (
 	"net/http"
+	"os"
 
 	"rsc.io/tmp/httplogger"
 )
 
 func init() {
-	http.DefaultTransport = httplogger.New(http.DefaultTransport)
+	if os.Getenv("HTTPLOG") == "1" {
+		http.DefaultTransport = httplogger.New(http.DefaultTransport)
+	}
 }
