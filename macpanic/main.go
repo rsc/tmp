@@ -282,8 +282,12 @@ func translate(pc uint64, syms []sym, exts bool) string {
 	}
 	desc := fmt.Sprintf("%s + %#x", name, pc-syms[i].addr)
 	if exts {
-		elem := syms[i].name[strings.LastIndex(syms[i].name, ".")+1:]
+		name := strings.TrimSuffix(syms[i].name, ".kext")
+		elem := name[strings.LastIndex(name, ".")+1:]
 		esyms, err := nm("/System/Library/Extensions/" + elem + ".kext/Contents/MacOS/" + elem)
+		if err != nil {
+			esyms, err = nm("/Library/Extensions/" + elem + ".kext/Contents/MacOS/" + elem)
+		}
 		if err == nil {
 			d := translate(pc-syms[i].addr, esyms, false)
 			if d != "???" {
