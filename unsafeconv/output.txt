@@ -1,0 +1,312 @@
+/Users/rsc/go/src/runtime/alg.go:106: array-convert unsafe.Pointer to *[2]float32: non-addr-of
+	(*[2]float32)(p)
+/Users/rsc/go/src/runtime/alg.go:111: array-convert unsafe.Pointer to *[2]float64: non-addr-of
+	(*[2]float64)(p)
+/Users/rsc/go/src/runtime/alg.go:252: array-convert unsafe.Pointer to *[2]int64: non-addr-of
+	(*[2]int64)(p)
+/Users/rsc/go/src/runtime/alg.go:252: array-convert unsafe.Pointer to *[2]int64: non-addr-of
+	(*[2]int64)(q)
+/Users/rsc/go/src/runtime/alg.go:360: slice-convert *[4]uintptr to []byte: slice-elem-mismatch
+	(*[len(hashkey) * sys.PtrSize]byte)(unsafe.Pointer(&hashkey))[:]
+/Users/rsc/go/src/runtime/alg.go:375: array-convert unsafe.Pointer to *[4]byte: non-addr-of
+	(*[4]byte)(p)
+/Users/rsc/go/src/runtime/alg.go:383: array-convert unsafe.Pointer to *[8]byte: non-addr-of
+	(*[8]byte)(p)
+/Users/rsc/go/src/runtime/debuglog.go:723: non-pointer
+	(*[1 << 20]readState)(state1)[:n]
+/Users/rsc/go/src/runtime/heapdump.go:71: non-pointer
+	(*[bufSize]byte)(data)[:len]
+/Users/rsc/go/src/runtime/heapdump.go:81: non-pointer
+	(*[bufSize]byte)(data)[:len]
+/Users/rsc/go/src/runtime/heapdump.go:575: array-convert *uintptr to *[100000]uintptr: non-addr-of
+	(*[100000]uintptr)(unsafe.Pointer(pstk))
+/Users/rsc/go/src/runtime/heapdump.go:707: non-pointer
+	(*[1 << 30]byte)(p)[:n]
+/Users/rsc/go/src/runtime/iface.go:202: non-pointer
+	(*[1 << 16]method)(add(unsafe.Pointer(x), uintptr(x.moff)))[:nt:nt]
+/Users/rsc/go/src/runtime/iface.go:204: slice-convert *uintptr to []unsafe.Pointer: slice-elem-mismatch
+	(*[1 << 16]unsafe.Pointer)(unsafe.Pointer(&m.fun[0]))[:ni:ni]
+/Users/rsc/go/src/runtime/malloc.go:735: array-convert unsafe.Pointer to *[4194304]*runtime.heapArena: non-addr-of
+	(*[1 << arenaL2Bits]*heapArena)(persistentalloc(unsafe.Sizeof(*l2), sys.PtrSize, nil))
+/Users/rsc/go/src/runtime/malloc.go:1040: array-convert unsafe.Pointer to *[2]uint64: non-addr-of
+	(*[2]uint64)(x)
+/Users/rsc/go/src/runtime/malloc.go:1041: array-convert unsafe.Pointer to *[2]uint64: non-addr-of
+	(*[2]uint64)(x)
+/Users/rsc/go/src/runtime/map_faststr.go:57: array-convert unsafe.Pointer to *[4]byte: non-addr-of
+	(*[4]byte)(key.str)
+/Users/rsc/go/src/runtime/map_faststr.go:57: array-convert unsafe.Pointer to *[4]byte: non-addr-of
+	(*[4]byte)(k.str)
+/Users/rsc/go/src/runtime/map_faststr.go:61: array-convert unsafe.Pointer to *[4]byte: non-addr-of
+	(*[4]byte)(add(key.str, uintptr(key.len)-4))
+/Users/rsc/go/src/runtime/map_faststr.go:61: array-convert unsafe.Pointer to *[4]byte: non-addr-of
+	(*[4]byte)(add(k.str, uintptr(key.len)-4))
+/Users/rsc/go/src/runtime/map_faststr.go:152: array-convert unsafe.Pointer to *[4]byte: non-addr-of
+	(*[4]byte)(key.str)
+/Users/rsc/go/src/runtime/map_faststr.go:152: array-convert unsafe.Pointer to *[4]byte: non-addr-of
+	(*[4]byte)(k.str)
+/Users/rsc/go/src/runtime/map_faststr.go:156: array-convert unsafe.Pointer to *[4]byte: non-addr-of
+	(*[4]byte)(add(key.str, uintptr(key.len)-4))
+/Users/rsc/go/src/runtime/map_faststr.go:156: array-convert unsafe.Pointer to *[4]byte: non-addr-of
+	(*[4]byte)(add(k.str, uintptr(key.len)-4))
+/Users/rsc/go/src/runtime/mbitmap.go:178: array-convert *uint8 to *[8]uint8: non-addr-of
+	(*[8]uint8)(unsafe.Pointer(s.allocBits.bytep(whichByte)))
+/Users/rsc/go/src/runtime/mbitmap.go:1574: non-pointer
+	(*[1 << 30]byte)(persistentalloc(n+1, 1, &memstats.buckhash_sys))[:n+1]
+/Users/rsc/go/src/runtime/mfinal.go:203: array-convert unsafe.Pointer to *[2]uintptr: non-addr-of
+	(*[2]uintptr)(frame)
+/Users/rsc/go/src/runtime/mgcscavenge.go:644: array-convert unsafe.Pointer to *[8192]runtime.pallocData: non-addr-of
+	(*[1 << pallocChunksL2Bits]pallocData)(atomic.Loadp(unsafe.Pointer(&s.chunks[i.l1()])))
+/Users/rsc/go/src/runtime/mprof.go:182: array-convert unsafe.Pointer to *[32]uintptr: non-addr-of
+	(*[maxStack]uintptr)(add(unsafe.Pointer(b), unsafe.Sizeof(*b)))
+/Users/rsc/go/src/runtime/mprof.go:207: array-convert unsafe.Pointer to *[179999]*runtime.bucket: non-addr-of
+	(*[buckHashSize]*bucket)(sysAlloc(unsafe.Sizeof(*buckhash), &memstats.buckhash_sys))
+/Users/rsc/go/src/runtime/mwbbuf.go:151: array-convert uintptr to *[2]uintptr: non-addr-of
+	(*[2]uintptr)(unsafe.Pointer(b.next))
+/Users/rsc/go/src/runtime/plugin.go:84: array-convert *interface{} to *[2]unsafe.Pointer: addr-of-non-index
+	(*[2]unsafe.Pointer)(unsafe.Pointer(&val))
+/Users/rsc/go/src/runtime/preempt.go:437: array-convert unsafe.Pointer to *[1048576]runtime.inlinedCall: non-addr-of
+	(*[1 << 20]inlinedCall)(inldata)
+/Users/rsc/go/src/runtime/proc.go:671: slice-convert *uintptr to []byte: slice-elem-mismatch
+	(*[unsafe.Sizeof(fastrandseed)]byte)(unsafe.Pointer(&fastrandseed))[:]
+/Users/rsc/go/src/runtime/select.go:126: array-convert *runtime.scase to *[65536]runtime.scase: non-addr-of
+	(*[1 << 16]scase)(unsafe.Pointer(cas0))
+/Users/rsc/go/src/runtime/select.go:127: array-convert *uint16 to *[131072]uint16: non-addr-of
+	(*[1 << 17]uint16)(unsafe.Pointer(order0))
+/Users/rsc/go/src/runtime/signal_amd64.go:53: array-convert uintptr to *[4]byte: non-addr-of
+	(*[4]byte)(unsafe.Pointer(gp.sigpc))
+/Users/rsc/go/src/runtime/signal_darwin_amd64.go:66: array-convert uintptr to *[2]byte: non-addr-of
+	(*[2]byte)(unsafe.Pointer(pc - 2))
+/Users/rsc/go/src/runtime/signal_unix.go:637: array-convert uintptr to *[16]byte: non-addr-of
+	(*[maxN]byte)(unsafe.Pointer(pc))
+/Users/rsc/go/src/runtime/string.go:430: array-convert *byte to *[140737488355327]byte: non-addr-of
+	(*[maxAlloc/2 - 1]byte)(unsafe.Pointer(s))
+/Users/rsc/go/src/runtime/string.go:468: array-convert *uint16 to *[70368744177663]uint16: non-addr-of
+	(*[maxAlloc/2/2 - 1]uint16)(unsafe.Pointer(s))
+/Users/rsc/go/src/runtime/string.go:485: array-convert *uint16 to *[70368744177663]uint16: non-addr-of
+	(*[maxAlloc/2/2 - 1]uint16)(unsafe.Pointer(strw))
+/Users/rsc/go/src/runtime/symtab.go:104: array-convert unsafe.Pointer to *[1048576]runtime.inlinedCall: non-addr-of
+	(*[1 << 20]inlinedCall)(inldata)
+/Users/rsc/go/src/runtime/symtab.go:184: array-convert unsafe.Pointer to *[1048576]runtime.inlinedCall: non-addr-of
+	(*[1 << 20]inlinedCall)(inldata)
+/Users/rsc/go/src/runtime/symtab.go:579: array-convert unsafe.Pointer to *[1048576]runtime.inlinedCall: non-addr-of
+	(*[1 << 20]inlinedCall)(inldata)
+/Users/rsc/go/src/runtime/trace.go:774: slice-convert *[0]uintptr to []uintptr: slice-elem-mismatch
+	(*[traceStackSize]uintptr)(unsafe.Pointer(&ts.stk))[:ts.n]
+/Users/rsc/go/src/runtime/traceback.go:362: array-convert unsafe.Pointer to *[1048576]runtime.inlinedCall: non-addr-of
+	(*[1 << 20]inlinedCall)(inldata)
+/Users/rsc/go/src/runtime/traceback.go:373: array-convert *uintptr to *[1048576]uintptr: non-addr-of
+	(*[1 << 20]uintptr)(unsafe.Pointer(pcbuf))
+/Users/rsc/go/src/runtime/traceback.go:388: array-convert *uintptr to *[1048576]uintptr: non-addr-of
+	(*[1 << 20]uintptr)(unsafe.Pointer(pcbuf))
+/Users/rsc/go/src/runtime/traceback.go:410: array-convert unsafe.Pointer to *[1048576]runtime.inlinedCall: non-addr-of
+	(*[1 << 20]inlinedCall)(inldata)
+/Users/rsc/go/src/runtime/traceback.go:439: array-convert uintptr to *[100]uintptr: non-addr-of
+	(*[100]uintptr)(unsafe.Pointer(frame.argp))
+/Users/rsc/go/src/runtime/traceback.go:646: array-convert *uintptr to *[1048576]uintptr: non-addr-of
+	(*[1 << 20]uintptr)(unsafe.Pointer(pcbuf))
+/Users/rsc/go/src/runtime/traceback.go:780: array-convert unsafe.Pointer to *[1048576]runtime.inlinedCall: non-addr-of
+	(*[1 << 20]inlinedCall)(inldata)
+/Users/rsc/go/src/runtime/type.go:318: non-pointer
+	(*[1 << 20]*_type)(add(unsafe.Pointer(t), uadd))[:t.inCount]
+/Users/rsc/go/src/runtime/type.go:328: non-pointer
+	(*[1 << 20]*_type)(add(unsafe.Pointer(t), uadd))[t.inCount : t.inCount+outCount]
+/Users/rsc/go/src/runtime/type.go:502: slice-convert *runtime.nameOff to []byte: slice-elem-mismatch
+	(*[4]byte)(unsafe.Pointer(&nameOff))[:]
+/Users/rsc/go/src/runtime/type.go:502: slice-convert *byte to []byte: valid
+	(*[4]byte)(unsafe.Pointer(n.data(off)))[:]
+/Users/rsc/go/src/internal/reflectlite/type.go:340: array-convert *byte to *[4]byte: non-addr-of
+	(*[4]byte)(unsafe.Pointer(n.bytes))
+/Users/rsc/go/src/internal/reflectlite/type.go:371: slice-convert *int32 to []byte: slice-elem-mismatch
+	(*[4]byte)(unsafe.Pointer(&nameOff))[:]
+/Users/rsc/go/src/internal/reflectlite/type.go:371: slice-convert *byte to []byte: valid
+	(*[4]byte)(unsafe.Pointer(n.data(off, "name offset field")))[:]
+/Users/rsc/go/src/internal/reflectlite/type.go:391: non-pointer
+	(*[1 << 16]method)(add(unsafe.Pointer(t), uintptr(t.moff), "t.mcount > 0"))[:t.mcount:t.mcount]
+/Users/rsc/go/src/internal/reflectlite/type.go:398: non-pointer
+	(*[1 << 16]method)(add(unsafe.Pointer(t), uintptr(t.moff), "t.xcount > 0"))[:t.xcount:t.xcount]
+/Users/rsc/go/src/internal/reflectlite/type.go:633: non-pointer
+	(*[1 << 20]*rtype)(add(unsafe.Pointer(t), uadd, "t.inCount > 0"))[:t.inCount:t.inCount]
+/Users/rsc/go/src/internal/reflectlite/type.go:645: non-pointer
+	(*[1 << 20]*rtype)(add(unsafe.Pointer(t), uadd, "outCount > 0"))[t.inCount : t.inCount+outCount : t.inCount+outCount]
+/Users/rsc/go/src/sync/pool.go:84: array-convert *interface{} to *[2]unsafe.Pointer: addr-of-non-index
+	(*[2]unsafe.Pointer)(unsafe.Pointer(&x))
+/Users/rsc/go/src/reflect/type.go:492: array-convert *byte to *[4]byte: non-addr-of
+	(*[4]byte)(unsafe.Pointer(n.bytes))
+/Users/rsc/go/src/reflect/type.go:523: slice-convert *int32 to []byte: slice-elem-mismatch
+	(*[4]byte)(unsafe.Pointer(&nameOff))[:]
+/Users/rsc/go/src/reflect/type.go:523: slice-convert *byte to []byte: valid
+	(*[4]byte)(unsafe.Pointer(n.data(off, "name offset field")))[:]
+/Users/rsc/go/src/reflect/type.go:630: non-pointer
+	(*[1 << 16]method)(add(unsafe.Pointer(t), uintptr(t.moff), "t.mcount > 0"))[:t.mcount:t.mcount]
+/Users/rsc/go/src/reflect/type.go:637: non-pointer
+	(*[1 << 16]method)(add(unsafe.Pointer(t), uintptr(t.moff), "t.xcount > 0"))[:t.xcount:t.xcount]
+/Users/rsc/go/src/reflect/type.go:1012: non-pointer
+	(*[1 << 20]*rtype)(add(unsafe.Pointer(t), uadd, "t.inCount > 0"))[:t.inCount:t.inCount]
+/Users/rsc/go/src/reflect/type.go:1024: non-pointer
+	(*[1 << 20]*rtype)(add(unsafe.Pointer(t), uadd, "outCount > 0"))[t.inCount : t.inCount+outCount : t.inCount+outCount]
+/Users/rsc/go/src/reflect/type.go:2227: slice-convert *byte to []byte: valid
+	(*[1 << 30]byte)(unsafe.Pointer(t.gcdata))[begin:end:end]
+/Users/rsc/go/src/reflect/value.go:1058: array-convert unsafe.Pointer to *[2]uintptr: non-addr-of
+	(*[2]uintptr)(v.ptr)
+/Users/rsc/go/src/syscall/syscall_bsd.go:152: array-convert *uint16 to *[2]byte: addr-of-non-index
+	(*[2]byte)(unsafe.Pointer(&sa.raw.Port))
+/Users/rsc/go/src/syscall/syscall_bsd.go:167: array-convert *uint16 to *[2]byte: addr-of-non-index
+	(*[2]byte)(unsafe.Pointer(&sa.raw.Port))
+/Users/rsc/go/src/syscall/syscall_bsd.go:245: slice-convert *int8 to []byte: slice-elem-mismatch
+	(*[len(pp.Path)]byte)(unsafe.Pointer(&pp.Path[0]))[0:n]
+/Users/rsc/go/src/syscall/syscall_bsd.go:252: array-convert *uint16 to *[2]byte: addr-of-non-index
+	(*[2]byte)(unsafe.Pointer(&pp.Port))
+/Users/rsc/go/src/syscall/syscall_bsd.go:262: array-convert *uint16 to *[2]byte: addr-of-non-index
+	(*[2]byte)(unsafe.Pointer(&pp.Port))
+/Users/rsc/go/src/syscall/syscall_bsd.go:504: array-convert *syscall.Timeval to *[2]syscall.Timeval: valid
+	(*[2]Timeval)(unsafe.Pointer(&tv[0]))
+/Users/rsc/go/src/syscall/syscall_bsd.go:516: array-convert *syscall.Timespec to *[2]syscall.Timespec: valid
+	(*[2]Timespec)(unsafe.Pointer(&ts[0]))
+/Users/rsc/go/src/syscall/syscall_bsd.go:526: array-convert *syscall.Timeval to *[2]syscall.Timeval: addr-of-index-of-non-slice
+	(*[2]Timeval)(unsafe.Pointer(&tv[0]))
+/Users/rsc/go/src/syscall/syscall_bsd.go:535: array-convert *syscall.Timeval to *[2]syscall.Timeval: valid
+	(*[2]Timeval)(unsafe.Pointer(&tv[0]))
+/Users/rsc/go/src/os/dir_darwin.go:58: slice-convert *[1024]int8 to []byte: slice-elem-mismatch
+	(*[len(syscall.Dirent{}.Name)]byte)(unsafe.Pointer(&dirent.Name))[:]
+/Users/rsc/go/src/crypto/x509/internal/macos/corefoundation.go:27: non-pointer
+	(*[1 << 20]byte)(unsafe.Pointer(ptr))[:length:length]
+/Users/rsc/go/src/vendor/golang.org/x/net/route/sys.go:20: array-convert *uint32 to *[4]byte: addr-of-non-index
+	(*[4]byte)(unsafe.Pointer(&i))
+/Users/rsc/go/src/net/cgo_unix.go:127: array-convert *uint16 to *[2]byte: addr-of-non-index
+	(*[2]byte)(unsafe.Pointer(&sa.Port))
+/Users/rsc/go/src/net/cgo_unix.go:131: array-convert *uint16 to *[2]byte: addr-of-non-index
+	(*[2]byte)(unsafe.Pointer(&sa.Port))
+/Users/rsc/go/src/runtime/pprof/proto.go:26: array-convert *interface{} to *[2]*uintptr: addr-of-non-index
+	(*[2]*uintptr)(unsafe.Pointer(&f))
+/Users/rsc/go/src/plugin/plugin_dlopen.go:121: array-convert *interface{} to *[2]unsafe.Pointer: addr-of-non-index
+	(*[2]unsafe.Pointer)(unsafe.Pointer(&sym))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/bolt_unix.go:62: array-convert *byte to *[281474976710655]byte: valid
+	(*[maxMapSize]byte)(unsafe.Pointer(&b[0]))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/db.go:1022: slice-convert *github.com/boltdb/bolt.meta to []byte: slice-elem-mismatch
+	(*[unsafe.Offsetof(meta{}.checksum)]byte)(unsafe.Pointer(m))[:]
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/freelist.go:169: array-convert *uintptr to *[2147483647]github.com/boltdb/bolt.pgid: addr-of-non-index
+	(*[maxAllocSize]pgid)(unsafe.Pointer(&p.ptr))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/freelist.go:176: array-convert *uintptr to *[2147483647]github.com/boltdb/bolt.pgid: addr-of-non-index
+	(*[maxAllocSize]pgid)(unsafe.Pointer(&p.ptr))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/freelist.go:204: array-convert *uintptr to *[2147483647]github.com/boltdb/bolt.pgid: addr-of-non-index
+	(*[maxAllocSize]pgid)(unsafe.Pointer(&p.ptr))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/freelist.go:207: array-convert *uintptr to *[2147483647]github.com/boltdb/bolt.pgid: addr-of-non-index
+	(*[maxAllocSize]pgid)(unsafe.Pointer(&p.ptr))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/freelist.go:208: array-convert *uintptr to *[2147483647]github.com/boltdb/bolt.pgid: addr-of-non-index
+	(*[maxAllocSize]pgid)(unsafe.Pointer(&p.ptr))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/node.go:210: slice-convert *uintptr to []byte: slice-elem-mismatch
+	(*[maxAllocSize]byte)(unsafe.Pointer(&p.ptr))[n.pageElementSize()*len(n.inodes):]
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/node.go:235: slice-convert *byte to []byte: valid
+	(*[maxAllocSize]byte)(unsafe.Pointer(&b[0]))[:]
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/page.go:59: array-convert *uintptr to *[134217727]github.com/boltdb/bolt.leafPageElement: addr-of-non-index
+	(*[0x7FFFFFF]leafPageElement)(unsafe.Pointer(&p.ptr))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/page.go:68: array-convert *uintptr to *[134217727]github.com/boltdb/bolt.leafPageElement: addr-of-non-index
+	(*[0x7FFFFFF]leafPageElement)(unsafe.Pointer(&p.ptr))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/page.go:73: array-convert *uintptr to *[134217727]github.com/boltdb/bolt.branchPageElement: addr-of-non-index
+	(*[0x7FFFFFF]branchPageElement)(unsafe.Pointer(&p.ptr))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/page.go:81: array-convert *uintptr to *[134217727]github.com/boltdb/bolt.branchPageElement: addr-of-non-index
+	(*[0x7FFFFFF]branchPageElement)(unsafe.Pointer(&p.ptr))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/page.go:86: slice-convert *github.com/boltdb/bolt.page to []byte: slice-elem-mismatch
+	(*[maxAllocSize]byte)(unsafe.Pointer(p))[:n]
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/page.go:105: array-convert *github.com/boltdb/bolt.branchPageElement to *[2147483647]byte: non-addr-of
+	(*[maxAllocSize]byte)(unsafe.Pointer(n))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/page.go:106: slice-convert *byte to []byte: valid
+	(*[maxAllocSize]byte)(unsafe.Pointer(&buf[n.pos]))[:n.ksize]
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/page.go:119: array-convert *github.com/boltdb/bolt.leafPageElement to *[2147483647]byte: non-addr-of
+	(*[maxAllocSize]byte)(unsafe.Pointer(n))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/page.go:120: slice-convert *byte to []byte: valid
+	(*[maxAllocSize]byte)(unsafe.Pointer(&buf[n.pos]))[:n.ksize:n.ksize]
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/page.go:125: array-convert *github.com/boltdb/bolt.leafPageElement to *[2147483647]byte: non-addr-of
+	(*[maxAllocSize]byte)(unsafe.Pointer(n))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/page.go:126: slice-convert *byte to []byte: valid
+	(*[maxAllocSize]byte)(unsafe.Pointer(&buf[n.pos+n.ksize]))[:n.vsize:n.vsize]
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/tx.go:488: array-convert *github.com/boltdb/bolt.page to *[2147483647]byte: non-addr-of
+	(*[maxAllocSize]byte)(unsafe.Pointer(p))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/tx.go:513: array-convert *byte to *[2147483647]byte: addr-of-index-of-non-slice
+	(*[maxAllocSize]byte)(unsafe.Pointer(&ptr[sz]))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/tx.go:532: slice-convert *github.com/boltdb/bolt.page to []byte: slice-elem-mismatch
+	(*[maxAllocSize]byte)(unsafe.Pointer(p))[:tx.db.pageSize]
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/cmd/bolt/main.go:591: array-convert *uintptr to *[268435455]github.com/boltdb/bolt/cmd/bolt.pgid: addr-of-non-index
+	(*[maxAllocSize]pgid)(unsafe.Pointer(&p.ptr))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/cmd/bolt/main.go:1495: array-convert *uintptr to *[134217727]github.com/boltdb/bolt/cmd/bolt.leafPageElement: addr-of-non-index
+	(*[0x7FFFFFF]leafPageElement)(unsafe.Pointer(&p.ptr))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/cmd/bolt/main.go:1501: array-convert *uintptr to *[134217727]github.com/boltdb/bolt/cmd/bolt.branchPageElement: addr-of-non-index
+	(*[0x7FFFFFF]branchPageElement)(unsafe.Pointer(&p.ptr))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/cmd/bolt/main.go:1513: array-convert *github.com/boltdb/bolt/cmd/bolt.branchPageElement to *[268435455]byte: non-addr-of
+	(*[maxAllocSize]byte)(unsafe.Pointer(n))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/cmd/bolt/main.go:1527: array-convert *github.com/boltdb/bolt/cmd/bolt.leafPageElement to *[268435455]byte: non-addr-of
+	(*[maxAllocSize]byte)(unsafe.Pointer(n))
+/Users/rsc/pkg/mod/github.com/boltdb/bolt@v1.3.1/cmd/bolt/main.go:1533: array-convert *github.com/boltdb/bolt/cmd/bolt.leafPageElement to *[268435455]byte: non-addr-of
+	(*[maxAllocSize]byte)(unsafe.Pointer(n))
+/Users/rsc/pkg/mod/golang.org/x/sys@v0.0.0-20200812155832-6a926be9bd1d/unix/syscall_bsd.go:147: array-convert *uint16 to *[2]byte: addr-of-non-index
+	(*[2]byte)(unsafe.Pointer(&sa.raw.Port))
+/Users/rsc/pkg/mod/golang.org/x/sys@v0.0.0-20200812155832-6a926be9bd1d/unix/syscall_bsd.go:162: array-convert *uint16 to *[2]byte: addr-of-non-index
+	(*[2]byte)(unsafe.Pointer(&sa.raw.Port))
+/Users/rsc/pkg/mod/golang.org/x/sys@v0.0.0-20200812155832-6a926be9bd1d/unix/syscall_bsd.go:240: slice-convert *int8 to []byte: slice-elem-mismatch
+	(*[len(pp.Path)]byte)(unsafe.Pointer(&pp.Path[0]))[0:n]
+/Users/rsc/pkg/mod/golang.org/x/sys@v0.0.0-20200812155832-6a926be9bd1d/unix/syscall_bsd.go:247: array-convert *uint16 to *[2]byte: addr-of-non-index
+	(*[2]byte)(unsafe.Pointer(&pp.Port))
+/Users/rsc/pkg/mod/golang.org/x/sys@v0.0.0-20200812155832-6a926be9bd1d/unix/syscall_bsd.go:257: array-convert *uint16 to *[2]byte: addr-of-non-index
+	(*[2]byte)(unsafe.Pointer(&pp.Port))
+/Users/rsc/pkg/mod/golang.org/x/sys@v0.0.0-20200812155832-6a926be9bd1d/unix/syscall_bsd.go:556: array-convert *golang.org/x/sys/unix.Timeval to *[2]golang.org/x/sys/unix.Timeval: valid
+	(*[2]Timeval)(unsafe.Pointer(&tv[0]))
+/Users/rsc/pkg/mod/golang.org/x/sys@v0.0.0-20200812155832-6a926be9bd1d/unix/syscall_bsd.go:575: array-convert *golang.org/x/sys/unix.Timespec to *[2]golang.org/x/sys/unix.Timespec: valid
+	(*[2]Timespec)(unsafe.Pointer(&ts[0]))
+/Users/rsc/pkg/mod/golang.org/x/sys@v0.0.0-20200812155832-6a926be9bd1d/unix/syscall_bsd.go:585: array-convert *golang.org/x/sys/unix.Timeval to *[2]golang.org/x/sys/unix.Timeval: addr-of-index-of-non-slice
+	(*[2]Timeval)(unsafe.Pointer(&tv[0]))
+/Users/rsc/pkg/mod/golang.org/x/sys@v0.0.0-20200812155832-6a926be9bd1d/unix/syscall_bsd.go:599: array-convert *golang.org/x/sys/unix.Timespec to *[2]golang.org/x/sys/unix.Timespec: valid
+	(*[2]Timespec)(unsafe.Pointer(&ts[0]))
+/Users/rsc/pkg/mod/golang.org/x/sys@v0.0.0-20200812155832-6a926be9bd1d/unix/syscall_bsd.go:611: array-convert *golang.org/x/sys/unix.Timeval to *[2]golang.org/x/sys/unix.Timeval: valid
+	(*[2]Timeval)(unsafe.Pointer(&tv[0]))
+/Users/rsc/pkg/mod/github.com/google/gopacket@v1.1.18/pcap/pcap.go:255: array-convert *uint8 to *[1073741824]byte: non-addr-of
+	(*[1 << 30]byte)(unsafe.Pointer(p.bufptr))
+/Users/rsc/Library/Caches/go-build/3d/3d0018cc1afa09c9c3b6ae69427b44843c67b6296d744f316d11f1a38426ede2-d:206: array-convert unsafe.Pointer to *[1073741824]byte: non-addr-of
+	(*[1 << 30]byte)(p)
+/Users/rsc/pkg/mod/github.com/google/gopacket@v1.1.18/pcap/pcap_unix.go:295: slice-convert *github.com/google/gopacket/pcap._Ctype_struct_bpf_insn to []github.com/google/gopacket/pcap._Ctype_struct_bpf_insn: valid
+	(*[bpfInstructionBufferSize]_Ctype_struct_bpf_insn)(unsafe.Pointer(p.bf_insns))[0:p.bf_len:p.bf_len]
+/Users/rsc/pkg/mod/github.com/google/gopacket@v1.1.18/pcap/pcap_unix.go:311: array-convert unsafe.Pointer to *[32768]github.com/google/gopacket/pcap._Ctype_struct_bpf_insn: non-addr-of
+	(*[bpfInstructionBufferSize]_Ctype_struct_bpf_insn)(cbpfInsns)
+/Users/rsc/pkg/mod/github.com/google/gopacket@v1.1.18/pcap/pcap_unix.go:373: array-convert *github.com/google/gopacket/pcap._Ctype_int to *[268435456]github.com/google/gopacket/pcap._Ctype_int: non-addr-of
+	(*[1 << 28]_Ctype_int)(unsafe.Pointer(dltbuf))
+/Users/rsc/pkg/mod/github.com/google/gopacket@v1.1.18/pcap/pcap_unix.go:619: array-convert *github.com/google/gopacket/pcap._Ctype_int to *[268435456]github.com/google/gopacket/pcap._Ctype_int: non-addr-of
+	(*[1 << 28]_Ctype_int)(unsafe.Pointer(types))
+/Users/rsc/pkg/mod/github.com/google/gopacket@v1.1.18/pfring/pfring.go:315: missing or bad type: *C.char
+	(*C.char)(unsafe.Pointer(&data[0]))
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/internal/socket/msghdr_bsd.go:28: slice-convert *byte to []byte: valid
+	(*[sizeofSockaddrInet6]byte)(unsafe.Pointer(h.Name))[:h.Namelen]
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/internal/socket/sys.go:22: array-convert *uint32 to *[4]byte: addr-of-non-index
+	(*[4]byte)(unsafe.Pointer(&i))
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv4/control_bsd.go:39: slice-convert *syscall.SockaddrDatalink to []byte: slice-elem-mismatch
+	(*[unsafe.Sizeof(sadl)]byte)(unsafe.Pointer(&sadl))[:]
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv4/sockopt_posix.go:48: slice-convert *golang.org/x/net/ipv4.ICMPFilter to []byte: slice-elem-mismatch
+	(*[sizeofICMPFilter]byte)(unsafe.Pointer(f))[:sizeofICMPFilter]
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv4/sys_asmreq.go:24: slice-convert *golang.org/x/net/ipv4.ipMreq to []byte: slice-elem-mismatch
+	(*[sizeofIPMreq]byte)(unsafe.Pointer(&mreq))[:sizeofIPMreq]
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv4/sys_asmreqn.go:40: slice-convert *golang.org/x/net/ipv4.ipMreqn to []byte: slice-elem-mismatch
+	(*[sizeofIPMreqn]byte)(unsafe.Pointer(&mreqn))[:sizeofIPMreqn]
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv4/sys_ssmreq.go:25: array-convert *golang.org/x/net/ipv4.groupReq to *[132]byte: addr-of-non-index
+	(*[sizeofGroupReq]byte)(unsafe.Pointer(&gr))
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv4/sys_ssmreq.go:30: slice-convert *golang.org/x/net/ipv4.groupReq to []byte: slice-elem-mismatch
+	(*[sizeofGroupReq]byte)(unsafe.Pointer(&gr))[:sizeofGroupReq]
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv4/sys_ssmreq.go:44: array-convert *golang.org/x/net/ipv4.groupSourceReq to *[260]byte: addr-of-non-index
+	(*[sizeofGroupSourceReq]byte)(unsafe.Pointer(&gsr))
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv4/sys_ssmreq.go:49: slice-convert *golang.org/x/net/ipv4.groupSourceReq to []byte: slice-elem-mismatch
+	(*[sizeofGroupSourceReq]byte)(unsafe.Pointer(&gsr))[:sizeofGroupSourceReq]
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv6/sockopt_posix.go:47: slice-convert *golang.org/x/net/ipv6.ICMPFilter to []byte: slice-elem-mismatch
+	(*[sizeofICMPv6Filter]byte)(unsafe.Pointer(f))[:sizeofICMPv6Filter]
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv6/sys_asmreq.go:22: slice-convert *golang.org/x/net/ipv6.ipv6Mreq to []byte: slice-elem-mismatch
+	(*[sizeofIPv6Mreq]byte)(unsafe.Pointer(&mreq))[:sizeofIPv6Mreq]
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv6/sys_ssmreq.go:27: array-convert *golang.org/x/net/ipv6.groupReq to *[132]byte: addr-of-non-index
+	(*[sizeofGroupReq]byte)(unsafe.Pointer(&gr))
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv6/sys_ssmreq.go:32: slice-convert *golang.org/x/net/ipv6.groupReq to []byte: slice-elem-mismatch
+	(*[sizeofGroupReq]byte)(unsafe.Pointer(&gr))[:sizeofGroupReq]
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv6/sys_ssmreq.go:46: array-convert *golang.org/x/net/ipv6.groupSourceReq to *[260]byte: addr-of-non-index
+	(*[sizeofGroupSourceReq]byte)(unsafe.Pointer(&gsr))
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/ipv6/sys_ssmreq.go:51: slice-convert *golang.org/x/net/ipv6.groupSourceReq to []byte: slice-elem-mismatch
+	(*[sizeofGroupSourceReq]byte)(unsafe.Pointer(&gsr))[:sizeofGroupSourceReq]
+/Users/rsc/pkg/mod/golang.org/x/net@v0.0.0-20200707034311-ab3426394381/route/sys.go:20: array-convert *uint32 to *[4]byte: addr-of-non-index
+	(*[4]byte)(unsafe.Pointer(&i))
+/Users/rsc/pkg/mod/golang.org/x/tools@v0.0.0-20200812231640-9176cd30088c/internal/fastwalk/fastwalk_unix.go:81: slice-convert *syscall.Dirent to []byte: slice-elem-mismatch
+	(*[unsafe.Sizeof(syscall.Dirent{})]byte)(unsafe.Pointer(dirent))[:]
+/Users/rsc/pkg/mod/golang.org/x/tools@v0.0.0-20200812231640-9176cd30088c/internal/fastwalk/fastwalk_unix.go:116: array-convert *int8 to *[1024]byte: addr-of-index-of-non-slice
+	(*[unsafe.Sizeof(dirent.Name)]byte)(unsafe.Pointer(&dirent.Name[0]))
