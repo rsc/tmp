@@ -8,8 +8,8 @@
 //
 //	yaml2json [-o output] [file...]
 //
-// Yaml2json reads the named files, or else standard input, as comma-separated value data
-// and prints that data in tab-separated form to standard output.
+// Yaml2json reads the named files, or else standard input, as YAML input
+// and prints that data in JSON form to standard output.
 //
 // The -o flag specifies the name of a file to write instead of using standard output.
 //
@@ -21,7 +21,7 @@
 //
 // To convert one:
 //
-//	yaml2json data.json
+//	yaml2json -o data.json data.yaml
 //
 package main
 
