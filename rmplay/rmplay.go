@@ -7,7 +7,7 @@ Rmplay removes play.golang.org playground snippets.
 
 Usage:
 
-	rmplay https://play.golang.org/p/xxx...
+	rmplay https://go.dev/play/p/xxx...
 
 Rmplay removes the snippets at each of the URLs named on the command line.
 (We do this when people accidentally post sensitive material there and email
@@ -32,7 +32,7 @@ import (
 	"cloud.google.com/go/datastore"
 )
 
-const prefix = "https://play.golang.org/p/"
+const prefix = "https://go.dev/play/p/"
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "usage: rmplay %sxxx...\n", prefix)
