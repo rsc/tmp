@@ -158,6 +158,10 @@ func uncoverFile(buf *bytes.Buffer, file string, src []byte, bounds []Boundary) 
 			endSimple = true
 		}
 
+		if startSimple && endSimple && startLine > endLine {
+			startLine = endLine
+		}
+
 		snippet := reindent(src[startLo:endHi])
 
 		var addr string
