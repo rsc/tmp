@@ -212,7 +212,7 @@ type Inst struct {
 var haveFuncdataH = false
 
 var (
-	textRE        = regexp.MustCompile(`TEXT.*\(SB\), \$([0-9]+)-([0-9]+)$`)
+	textRE        = regexp.MustCompile(`TEXT.*\(SB\), ABIInternal, \$([0-9]+)-([0-9]+)$`)
 	flt64RE       = regexp.MustCompile(`\$f64\.[0-9a-f]{16}\(SB\)`)
 	spRE          = regexp.MustCompile(`\+[0-9]+\((FP|SP)\)`)
 	stackPkgRE    = regexp.MustCompile(`""\.([^ ,\t]+)\+[0-9]+\((SP|FP)\)`)
