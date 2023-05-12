@@ -12,6 +12,19 @@
 // It writes that new to a new directory named by dir.
 // If dir already exists it must be an empty directory.
 // If dir is omitted, gonew uses ./elem where elem is the final path element of dstMod.
+//
+// This command is highly experimental and subject to change.
+//
+// Example
+//
+// To clone the basic command-line program template rsc.io/tmp/newcmd
+// as your.domain/myprog, in the directory ./myprog:
+//
+//	gonew rsc.io/tmp/newcmd your.domain/myprog
+//
+// Or without having to install gonew first:
+//
+//	go run rsc.io/tmp/gonew@latest rsc.io/tmp/newcmd your.domain/myprog
 package main
 
 import (
