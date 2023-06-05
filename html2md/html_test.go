@@ -7,7 +7,7 @@ package main
 import (
 	"fmt"
 	"io/fs"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -129,7 +129,7 @@ func TestDoc(t *testing.T) {
 		if !strings.HasSuffix(path, ".html") {
 			return nil
 		}
-		data, err := ioutil.ReadFile(path)
+		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}

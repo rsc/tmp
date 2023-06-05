@@ -7,8 +7,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,7 +19,7 @@ import (
 
 func main() {
 	if len(os.Args) == 1 {
-		data, err := ioutil.ReadAll(os.Stdin)
+		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -37,7 +37,7 @@ func main() {
 			if !strings.HasSuffix(path, ".html") {
 				return nil
 			}
-			data, err := ioutil.ReadFile(path)
+			data, err := os.ReadFile(path)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -76,7 +76,7 @@ func main() {
 			md = strings.TrimRight(md, "\n") + "\n"
 			buf.WriteString(md)
 
-			err = ioutil.WriteFile(strings.TrimSuffix(path, ".html")+".md", buf.Bytes(), 0666)
+			err = os.WriteFile(strings.TrimSuffix(path, ".html")+".md", buf.Bytes(), 0666)
 			if err != nil {
 				log.Fatalf("%s: %v", path, err)
 			}

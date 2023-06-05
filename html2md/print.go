@@ -251,7 +251,7 @@ func (x text) printInline(p *printer) {
 	for s != "" {
 		var line string
 		var haveNL bool
-		line, s, haveNL = cut(s, "\n")
+		line, s, haveNL = strings.Cut(s, "\n")
 		trim := strings.TrimSpace(line)
 		if trim == "" {
 			p.needSpace = true
@@ -316,14 +316,6 @@ func (p *printer) maybeSpace() {
 		p.buf.WriteByte(' ')
 	}
 	p.needSpace = false
-}
-
-func cut(s, sep string) (before, after string, found bool) {
-	i := strings.Index(s, sep)
-	if i < 0 {
-		return s, "", false
-	}
-	return s[:i], s[i+len(sep):], true
 }
 
 func mdprint(x block) string {
