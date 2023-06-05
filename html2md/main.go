@@ -7,6 +7,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -17,8 +19,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func usage() {
+	fmt.Fprintf(os.Stderr, "usage: html2md [file...]\n")
+	flag.PrintDefaults()
+	os.Exit(2)
+}
+
 func main() {
-	if len(os.Args) == 1 {
+	log.SetPrefix("html2md: ")
+	log.SetFlags(0)
+	flag.Usage = usage
+	flag.Parse()
+
+	if flag.NArg() == 0 {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			log.Fatal(err)
@@ -32,7 +45,7 @@ func main() {
 		return
 	}
 
-	for _, arg := range os.Args[1:] {
+	for _, arg := range flag.Args() {
 		filepath.Walk(arg, func(path string, info fs.FileInfo, err error) error {
 			if !strings.HasSuffix(path, ".html") {
 				return nil
