@@ -180,6 +180,7 @@ type strong inlines
 func (x strong) printInline(p *printer) {
 	p.maybeSpace()
 	p.buf.WriteString("**")
+	p.trimSpace = true
 	inlines(x).printInline(p)
 	p.buf.WriteString("**")
 }
@@ -248,6 +249,10 @@ type text string
 
 func (x text) printInline(p *printer) {
 	s := string(x)
+	if p.trimSpace {
+		s = strings.TrimSpace(s)
+		p.trimSpace = false
+	}
 	for s != "" {
 		var line string
 		var haveNL bool
@@ -273,6 +278,7 @@ var escaper = strings.NewReplacer(`*`, `\*`, `_`, `\_`)
 type printer struct {
 	buf       bytes.Buffer
 	needSpace bool
+	trimSpace bool
 	prefix    []byte
 }
 

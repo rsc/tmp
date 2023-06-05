@@ -104,6 +104,17 @@ var htmlTests = []struct {
 		and
 		<code><small>XTAHU</small></code>.
 	`},
+	{`
+		<p>
+		  <strong>
+		    Go 1.21 is not yet released. These are work-in-progress
+		    release notes. Go 1.21 is expected to be released in August 2023.
+		  </strong>
+		</p>
+	`, `
+		**Go 1.21 is not yet released. These are work-in-progress
+		release notes. Go 1.21 is expected to be released in August 2023.**
+	`},
 }
 
 func TestHTML(t *testing.T) {

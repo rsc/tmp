@@ -100,6 +100,16 @@ var printTests = []struct {
 	{
 		para{
 			text(" a "),
+			strong{text("\n b \n")},
+			text(" c "),
+		},
+		`
+		a **b** c
+		`,
+	},
+	{
+		para{
+			text(" a "),
 			strong{text("b")},
 			text(" c "),
 		},
