@@ -34,7 +34,9 @@ type heading struct {
 func (x heading) printBlock(p *printer) {
 	p.buf.WriteString(strings.Repeat("#", x.level))
 	p.buf.WriteString(" ")
+	p.nlToSpace = true
 	x.inner.printInline(p)
+	p.nlToSpace = false
 	if x.id != "" {
 		p.buf.WriteString(" {#")
 		p.buf.WriteString(x.id)
@@ -268,7 +270,12 @@ func (x text) printInline(p *printer) {
 			p.needSpace = !strings.HasSuffix(line, trim)
 		}
 		if haveNL {
-			p.printNL(false)
+			if p.nlToSpace {
+				p.needSpace = true
+				p.maybeSpace()
+			} else {
+				p.printNL(false)
+			}
 		}
 	}
 }
@@ -279,6 +286,7 @@ type printer struct {
 	buf       bytes.Buffer
 	needSpace bool
 	trimSpace bool
+	nlToSpace bool
 	prefix    []byte
 }
 

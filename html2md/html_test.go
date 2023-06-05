@@ -115,6 +115,12 @@ var htmlTests = []struct {
 		**Go 1.21 is not yet released. These are work-in-progress
 		release notes. Go 1.21 is expected to be released in August 2023.**
 	`},
+	{`
+		<h4 id="vet-testing-T">New warning for invalid testing.T use in
+		goroutines</h4>
+	`, `
+		#### New warning for invalid testing.T use in goroutines {#vet-testing-T}
+	`},
 }
 
 func TestHTML(t *testing.T) {
