@@ -6,7 +6,7 @@
 //
 // Usage:
 //
-//	gonew srcMod[@version] dstMod [dir]
+//	gonew srcMod[@version] [dstMod [dir]]
 //
 // Gonew makes a copy of the srcMod, changing its module path to dstMod.
 // It writes that new to a new directory named by dir.
@@ -25,6 +25,11 @@
 // Or without having to install gonew first:
 //
 //	go run rsc.io/tmp/gonew@latest rsc.io/tmp/newcmd your.domain/myprog
+//
+// To clone a module without renaming the module:
+//
+//	gonew rsc.io/tmp/quote
+//
 package main
 
 import (
@@ -42,7 +47,7 @@ import (
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "gonew srcMod[@version] dstMod [dir]\n")
+	fmt.Fprintf(os.Stderr, "gonew srcMod[@version] [dstMod [dir]]\n")
 	os.Exit(2)
 }
 
@@ -53,7 +58,7 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 
-	if len(args) < 2 || len(args) > 3 {
+	if len(args) < 1 || len(args) > 3 {
 		usage()
 	}
 
@@ -65,7 +70,10 @@ func main() {
 	srcMod, _, _ = strings.Cut(srcMod, "@")
 	srcBase := path.Base(srcMod)
 
-	dstMod := args[1]
+	dstMod := srcMod
+	if len(args) >= 2 {
+		dstMod = args[1]
+	}
 	dstBase := path.Base(dstMod)
 
 	var dir string
