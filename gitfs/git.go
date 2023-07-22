@@ -42,6 +42,7 @@ func (r *Repo) handshake() error {
 	if err != nil {
 		return fmt.Errorf("handshake: %v", err)
 	}
+	defer resp.Body.Close()
 	data, err := ioutil.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("handshake: %v\n%s", resp.Status, data)
