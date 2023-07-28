@@ -72,9 +72,8 @@
 // in a structured report. Before exiting, it writes the report as JSON to gorebuild.json
 // and as HTML to gorebuild.html.
 //
-// Gorebuild exits with status 0 when it succeeeds in rebuilding and verifying all
-// the requested files. It exits 1 on a fatal error, 2 on a usage problem,
-// and 3 if it ran to completion but some targets could not be verified.
+// Gorebuild exits with status 0 when it succeeeds in writing a report,
+// whether or not the report verified all the posted files.
 package main
 
 import (
@@ -115,9 +114,6 @@ func main() {
 	r := Run(flag.Args())
 	writeJSON(r)
 	writeHTML(r)
-	if r.Log.Status != PASS {
-		os.Exit(3)
-	}
 }
 
 func reformat(file string) {

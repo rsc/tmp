@@ -462,12 +462,17 @@ func DiffArchive[File1, File2 any](log *Log,
 // and applying fix to files before comparing them.
 // It reports whether the archives match.
 func DiffTarGz(log *Log, rebuilt, posted []byte, fix Fixer) bool {
+	n := 0
 	check := func(log *Log, rebuilt, posted *TarFile) bool {
 		match := true
 		name := rebuilt.Name
 		field := func(what string, rebuilt, posted any) {
 			if posted != rebuilt {
-				log.Printf("%s: rebuilt %s = %v, posted = %v", name, what, rebuilt, posted)
+				if n++; n <= 100 {
+					log.Printf("%s: rebuilt %s = %v, posted = %v", name, what, rebuilt, posted)
+				} else if n == 101 {
+					log.Printf("eliding additional diffs ...")
+				}
 				match = false
 			}
 		}
@@ -508,12 +513,17 @@ func DiffTarGz(log *Log, rebuilt, posted []byte, fix Fixer) bool {
 // and applying fix to files before comparing them.
 // It reports whether the archives match.
 func DiffZip(log *Log, rebuilt, posted []byte, fix Fixer) bool {
+	n := 0
 	check := func(log *Log, rebuilt, posted *ZipFile) bool {
 		match := true
 		name := rebuilt.Name
 		field := func(what string, rebuilt, posted any) {
 			if posted != rebuilt {
-				log.Printf("%s: rebuilt %s = %v, posted = %v", name, what, rebuilt, posted)
+				if n++; n <= 100 {
+					log.Printf("%s: rebuilt %s = %v, posted = %v", name, what, rebuilt, posted)
+				} else if n == 101 {
+					log.Printf("eliding additional diffs ...")
+				}
 				match = false
 			}
 		}
@@ -526,8 +536,9 @@ func DiffZip(log *Log, rebuilt, posted []byte, fix Fixer) bool {
 		field("readerversion", r.ReaderVersion, p.ReaderVersion)
 		field("flags", r.Flags, p.Flags)
 		field("method", r.Method, p.Method)
-		field("modified", r.Modified, p.Modified)
-		field("mtime", r.ModifiedTime, p.ModifiedTime)
+		// Older versions of Go produce in-comparable times in archive/zip.
+		// Only compare the actual time instant, in case we're using one of those older versions.
+		field("modifiedUnix", r.Modified.UnixNano(), p.Modified.UnixNano())
 		field("mdate", r.ModifiedDate, p.ModifiedDate)
 		if len(p.Extra) == 2*len(r.Extra) && string(p.Extra) == string(r.Extra)+string(r.Extra) {
 			// Mac signing rewrites the zip file, which ends up doubling
