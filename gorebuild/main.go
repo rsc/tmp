@@ -2,7 +2,79 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Work in progress. DO NOT USE.
+// Gorebuild rebuilds and verifies the distribution files posted at https://go.dev/dl/.
+//
+// Usage:
+//
+//	gorebuild [-p N] [goos-goarch][@version]...
+//
+// With no arguments, gorebuild rebuilds and verifies the files for all systems
+// (that is, all operating system-architecture pairs) for up to three versions of Go:
+//
+//   - the most recent patch release of the latest Go major version,
+//   - the most recent patch release of the previous Go major version, and
+//   - the latest release candidate of an upcoming Go major version, if there is one.
+//
+// Only Go versions starting at Go 1.21 or later are considered for this default
+// set of versions, because Go 1.20 and earlier did not ship reproducible toolchains.
+//
+// With arguments, gorebuild rebuilds the files only for the named toolchains:
+//
+//   - The syntax goos-goarch (for example, "linux-amd64") denotes the files
+//     for that specific system's toolchains for the three default versions.
+//   - The syntax @version (for example, "@go1.21rc3") denotes the files
+//     for all systems, at a specific Go version.
+//   - The syntax goos-goarch@version (for example, "linux-amd64@go1.21rc3")
+//     denotes the files for a specific system at a specific Go version.
+//
+// The -p flag specifies how many toolchain rebuilds to run in parallel (default 2).
+//
+// When running on linux-amd64, gorebuild does a full bootstrap, building Go 1.4
+// (written in C) with the host C compiler, then building Go 1.17 with Go 1.4,
+// then building Go 1.20 using Go 1.17, and so on, up to the target toolchain.
+// On other systems, gorebuild downloads a binary distribution
+// of the bootstrap toolchain it needs. For example, Go 1.21 required Go 1.17,
+// so to rebuild and verify Go 1.21, gorebuild downloads and uses the latest binary
+// distribution of the Go 1.17 toolchain (specifically, Go 1.17.13) from https://go.dev/dl/.
+//
+// In general, gorebuild checks that the local rebuild produces a bit-for-bit
+// identical copy of the file posted at https://go.dev/dl/.
+// Similarly, gorebuild checks that the local rebuild produces a bit-for-bit
+// identical copy of the module form of the toolchain used by Go 1.21's
+// toolchain downloads (also served by https://go.dev/dl/).
+//
+// However, in a few cases gorebuild does not insist on a bit-for-bit comparison.
+// These cases are:
+//
+//   - For macOS, https://go.dev/dl/ posts .tar.gz files containing binaries
+//     signed by Google's code-signing key.
+//     Gorebuild has no way to sign the binaries it produces using that same key.
+//     Instead, gorebuild compares the content of the rebuilt archive with the
+//     content of the posted archive, checking that non-executables match exactly
+//     and that executables match exactly after stripping their code signatures.
+//     The same comparison is applied to the module form of the toolchain.
+//
+//   - For macOS, https://go.dev/dl/ posts a .pkg installer file.
+//     Gorebuild does not run the macOS tools to rebuild that installer.
+//     Instead, it parses the .pkg file and checks that the contents match
+//     the rebuilt .tar.gz file exactly, again after stripping code signatures.
+//     The .pkg is permitted to have one extra file, /etc/paths.d/go, which
+//     is unique to the .pkg form.
+//
+//   - For Windows, https://go.dev/dl/ posts a .msi installer file.
+//     Gorebuild does not run the Windows tools to rebuild that installer.
+//     Instead, it invokes the Unix program “msiextract” to unpack the file
+//     and then checks that the contents match the rebuilt .zip file exactly.
+//     If “msiextract” is not found in the PATH, the .msi file is skipped
+//     rather than considered a failure.
+//
+// Gorebuild prints log messages to standard error but also accumulates them
+// in a structured report. Before exiting, it writes the report as JSON to gorebuild.json
+// and as HTML to gorebuild.html.
+//
+// Gorebuild exits with status 0 when it succeeeds in rebuilding and verifying all
+// the requested files. It exits 1 on a fatal error, 2 on a usage problem,
+// and 3 if it ran to completion but some targets could not be verified.
 package main
 
 import (

@@ -132,7 +132,7 @@ func UnpackTarGz(dir string, tgz []byte) error {
 			continue
 		}
 		name := filepath.FromSlash(hdr.Name)
-		if !filepath.IsLocal(name) {
+		if name != filepath.Clean(name) || strings.HasPrefix(name, "..") || filepath.IsAbs(name) {
 			return fmt.Errorf("invalid name in tgz: %#q", hdr.Name)
 		}
 		targ := filepath.Join(dir, name)
@@ -175,7 +175,7 @@ func UnpackZip(dir string, zipdata []byte) error {
 			continue
 		}
 		name := filepath.FromSlash(zf.Name)
-		if !filepath.IsLocal(name) {
+		if name != filepath.Clean(name) || strings.HasPrefix(name, "..") || filepath.IsAbs(name) {
 			return fmt.Errorf("invalid name in zip: %#q", zf.Name)
 		}
 		targ := filepath.Join(dir, name)

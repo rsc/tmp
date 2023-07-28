@@ -227,6 +227,9 @@ func Run(args []string) *Report {
 			if f.Log.Status == FAIL {
 				rel.Log.Printf("FAIL: %s did not verify", f.Name)
 			}
+			if f.Log.Status == SKIP && rel.Log.Status == PASS {
+				rel.Log.Status = SKIP // be clear not completely verified
+			}
 		}
 		if rel.Log.Status == PASS {
 			rel.Log.Printf("PASS")
@@ -234,6 +237,9 @@ func Run(args []string) *Report {
 		if rel.Log.Status == FAIL {
 			r.Log.Printf("FAIL: %s did not verify", rel.Version)
 			r.Log.Status = FAIL
+		}
+		if rel.Log.Status == SKIP && r.Log.Status == PASS {
+			r.Log.Status = SKIP // be clear not completely verified
 		}
 	}
 	if r.Log.Status == PASS {
