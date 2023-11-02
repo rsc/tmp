@@ -17,7 +17,7 @@
 // The -l flag runs palm in an interactive line-based mode:
 // it reads a single line of input and prints the PaLM response,
 // and repeats. The -l flag cannot be used with arguments.
-
+//
 // The -k flag specifies the name of a file containing the PaLM API key
 // (default $HOME/.palmkey).
 //
