@@ -43,10 +43,11 @@ var (
 	key      string
 	lineMode = flag.Bool("l", false, "line at a time mode")
 	keyFile  = flag.String("k", filepath.Join(home, ".geminikey"), "read gemini API key from `file`")
+	model    = flag.String("m", "gemini-pro", "use gemini `model`") // gemini-1.5-pro-latest is only in free mode
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: gemini [-l] [-k keyfile]\n")
+	fmt.Fprintf(os.Stderr, "usage: gemini [-l] [-k keyfile] [-m model]\n")
 	os.Exit(2)
 }
 
@@ -101,7 +102,7 @@ func do(prompt string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	resp, err := http.Post("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key="+key, "application/json", bytes.NewReader(js))
+	resp, err := http.Post("https://generativelanguage.googleapis.com/v1beta/models/"+*model+":generateContent?key="+key, "application/json", bytes.NewReader(js))
 	if err != nil {
 		log.Fatal(err)
 	}
