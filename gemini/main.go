@@ -95,7 +95,7 @@ func do(prompt string) {
 	// curl \
 	// -H 'Content-Type: application/json' \
 	// -d '{ "prompt": { "text": "Write a story about a magic backpack"} }' \
-	// "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=YOUR_API_KEY"
+	// "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=YOUR_API_KEY"
 
 	js, err := json.Marshal(map[string][]map[string][]map[string]string{"contents": {{"parts": {{"text": prompt}}}}})
 	if err != nil {
@@ -124,13 +124,21 @@ func do(prompt string) {
 	if len(r.Candidates) == 0 {
 		fmt.Fprintf(os.Stderr, "no candidate answers")
 	}
+	seen := 0
 	for _, c := range r.Candidates {
+		if len(c.Content.Parts) == 0 {
+			continue
+		}
+		seen++
 		fmt.Printf("%s\n", c.Content.Parts[0].Text)
 		for _, rate := range c.SafetyRatings {
 			if rate.Probability != "NEGLIGIBLE" {
 				fmt.Printf("%s=%s\n", rate.Category, rate.Probability)
 			}
 		}
+	}
+	if seen == 0 {
+		log.Fatalf("did not find part to print in:\n%s", data)
 	}
 }
 
