@@ -43,11 +43,12 @@ var (
 	key      string
 	lineMode = flag.Bool("l", false, "line at a time mode")
 	keyFile  = flag.String("k", filepath.Join(home, ".geminikey"), "read gemini API key from `file`")
-	model    = flag.String("m", "gemini-pro", "use gemini `model`") // gemini-1.5-pro-latest is only in free mode
+	model    = flag.String("m", "", "use gemini `model`") // gemini-1.5-pro-latest is only in free mode
+	embed    = flag.Bool("e", false, "print embedding")
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: gemini [-l] [-k keyfile] [-m model]\n")
+	fmt.Fprintf(os.Stderr, "usage: gemini [-e] [-l] [-k keyfile] [-m model]\n")
 	os.Exit(2)
 }
 
@@ -62,6 +63,11 @@ func main() {
 		log.Fatal(err)
 	}
 	key = strings.TrimSpace(string(data))
+
+	do := generateContent
+	if *embed {
+		do = embedContent
+	}
 
 	if *lineMode {
 		if flag.NArg() != 0 {
@@ -92,7 +98,48 @@ func main() {
 	}
 }
 
-func do(prompt string) {
+func embedContent(prompt string) {
+	if *model == "" {
+		*model = "text-embedding-004"
+	}
+	// TODO title
+	js, err := json.Marshal(map[string]map[string][]map[string]string{"content": {"parts": {{"text": prompt}}}})
+	if err != nil {
+		log.Fatal(err)
+	}
+	resp, err := http.Post("https://generativelanguage.googleapis.com/v1beta/models/"+*model+":embedContent?key="+key, "application/json", bytes.NewReader(js))
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	data, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		log.Fatalf("%s:\n%s", resp.Status, data)
+	}
+	if err != nil {
+		log.Fatalf("reading body: %v", err)
+	}
+
+	var r EmbedResponse
+	if err := json.Unmarshal(data, &r); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("%v\n", r.Embedding.Values)
+}
+
+type EmbedResponse struct {
+	Embedding struct {
+		Values []float64
+	}
+}
+
+func generateContent(prompt string) {
+	if *model == "" {
+		*model = "gemini-pro"
+	}
 	// curl \
 	// -H 'Content-Type: application/json' \
 	// -d '{ "prompt": { "text": "Write a story about a magic backpack"} }' \
