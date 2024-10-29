@@ -6,13 +6,16 @@
 //
 // Usage:
 //
-//	jsonfmt [-o output] [file...]
+//	jsonfmt [-f template] [-o output] [file...]
 //
 // Jsonfmt reads the named files, or else standard input, as JSON data
 // and then reprints that same JSON data to standard output.
 //
-// The -o flag specifies the name of a file to write instead of using standard output.
+// The -f flag specifies a template to execute on the JSON data.
+// The output of the template is printed to standard output
+// instead of reformatted JSON.
 //
+// The -o flag specifies the name of a file to write instead of using standard output.
 package main
 
 import (
@@ -21,14 +24,17 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"log"
 	"os"
 )
 
 var (
+	fflag = flag.String("f", "", "use template to format JSON objects")
 	oflag = flag.String("o", "", "write output to `file` (default standard output)")
 
+	tmpl    *template.Template
 	output  *bufio.Writer
 	comment rune
 	exit    = 0
@@ -53,6 +59,13 @@ func main() {
 			log.Fatal(err)
 		}
 		outfile = f
+	}
+	if *fflag != "" {
+		t, err := template.New("").Parse(*fflag)
+		if err != nil {
+			log.Fatalf("parsing -f template: %v", err)
+		}
+		tmpl = t
 	}
 	output = bufio.NewWriter(outfile)
 
@@ -82,12 +95,28 @@ func convert(f *os.File) {
 		return
 	}
 	var buf bytes.Buffer
-	if err := json.Indent(&buf, data, "", "\t"); err != nil {
-		log.Printf("%s: encoding: %v", f.Name(), err)
-		exit = 1
-		return
+	if tmpl != nil {
+		var x any
+		if err := json.Unmarshal(data, &x); err != nil {
+			log.Printf("%s: decoding: %v", f.Name(), err)
+			exit = 1
+			return
+		}
+		if err := tmpl.Execute(&buf, x); err != nil {
+			log.Printf("%s: executing template: %v", f.Name(), err)
+			exit = 1
+			return
+		}
+	} else {
+		if err := json.Indent(&buf, data, "", "\t"); err != nil {
+			log.Printf("%s: encoding: %v", f.Name(), err)
+			exit = 1
+			return
+		}
 	}
 	data = buf.Bytes()
-	data = append(data, '\n')
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		data = append(data, '\n')
+	}
 	os.Stdout.Write(data)
 }
