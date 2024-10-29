@@ -90,7 +90,7 @@ func main() {
 func convert(f *os.File) {
 	data, err := ioutil.ReadAll(f)
 	if err != nil {
-		log.Print("%s: reading: %v", f.Name(), err)
+		log.Printf("%s: reading: %v", f.Name(), err)
 		exit = 1
 		return
 	}
