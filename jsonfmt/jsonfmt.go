@@ -25,6 +25,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -94,29 +95,41 @@ func convert(f *os.File) {
 		exit = 1
 		return
 	}
-	var buf bytes.Buffer
-	if tmpl != nil {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if tmpl == nil {
+		dec.UseNumber()
+	}
+	for {
 		var x any
-		if err := json.Unmarshal(data, &x); err != nil {
+		if err := dec.Decode(&x); err != nil {
+			if err == io.EOF {
+				break
+			}
 			log.Printf("%s: decoding: %v", f.Name(), err)
 			exit = 1
 			return
 		}
-		if err := tmpl.Execute(&buf, x); err != nil {
-			log.Printf("%s: executing template: %v", f.Name(), err)
-			exit = 1
-			return
+		var out []byte
+		if tmpl != nil {
+			var buf bytes.Buffer
+			if err := tmpl.Execute(&buf, x); err != nil {
+				log.Printf("%s: executing template: %v", f.Name(), err)
+				exit = 1
+				return
+			}
+			out = buf.Bytes()
+		} else {
+			js, err := json.Marshal(x)
+			if err != nil {
+				log.Printf("%s: remarshaling: %v", f.Name(), err)
+				exit = 1
+				return
+			}
+			out = js
 		}
-	} else {
-		if err := json.Indent(&buf, data, "", "\t"); err != nil {
-			log.Printf("%s: encoding: %v", f.Name(), err)
-			exit = 1
-			return
+		if len(out) > 0 && out[len(out)-1] != '\n' {
+			out = append(out, '\n')
 		}
+		os.Stdout.Write(out)
 	}
-	data = buf.Bytes()
-	if len(data) > 0 && data[len(data)-1] != '\n' {
-		data = append(data, '\n')
-	}
-	os.Stdout.Write(data)
 }
