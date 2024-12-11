@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<script src="wasm_exec.js"></script>
+<script type="text/javascript">
+function fetchAndInstantiate(url, importObject) {
+  return fetch(url).then(response =>
+    response.arrayBuffer()
+  ).then(bytes =>
+    WebAssembly.instantiate(bytes, importObject)
+  ).then(results =>
+      results.instance
+  );
+}
+var go = new Go();
+var mod = fetchAndInstantiate("main.wasm", go.importObject);
+window.onload = function() {
+  mod.then(function(instance) {
+    go.run(instance);
+  });
+};
+</script>
+
+Hello world
+
+<textarea id="chat" cols="80" autofocus>
+It was a dark and stormy night...
+</textarea>
+
+
+<script>
+var chat = document.getElementById('chat');
+
+chat.addEventListener('keydown', (event) => {
+  if (event.ctrlKey && event.key === 'Enter') {
+    chat.value = gocallback(chat.value);
+    event.preventDefault();
+  }
+});
+</script>
