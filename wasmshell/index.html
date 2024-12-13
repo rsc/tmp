@@ -17,22 +17,38 @@ window.onload = function() {
     go.run(instance);
   });
 };
+function run() {
+	const chat = document.getElementById('chat');
+	const output = document.getElementById('output');
+	output.innerText = gocallback(chat.value)
+}
 </script>
 
-Hello world
+<pre>
+Demo of Go wasm crash bug.
 
+Open the developer console and click Run.
+You will see "Uncaught RangeError: Maximum call stack size exceeded."
+
+Click Run again.
+Now "fatal error: bad sweepgen in refill", or sometimes
+a different internal runtime error indicating corruption.
+
+Sometimes you need to click Run a couple times to get the crash.
+</pre>
+
+<div>
+<button onclick="run()">Run</button>
+</div>
+
+<div>
 <textarea id="chat" cols="80" autofocus>
-It was a dark and stormy night...
+op a gcd b = a == b: a; a > b: b gcd a-b; a gcd b-a
+1562 gcd !11
 </textarea>
+</div>
 
+<div>
+<pre id="output"></pre>
+</div>
 
-<script>
-var chat = document.getElementById('chat');
-
-chat.addEventListener('keydown', (event) => {
-  if (event.ctrlKey && event.key === 'Enter') {
-    chat.value = gocallback(chat.value);
-    event.preventDefault();
-  }
-});
-</script>
