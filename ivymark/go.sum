@@ -1,0 +1,6 @@
+golang.org/x/text v0.3.7 h1:olpwvP2KacW1ZWvsR7uQhoyTYvKAupfQrRGBFM352Gk=
+golang.org/x/text v0.3.7/go.mod h1:u+2+/6zg+i71rQMx5EYifcz6MCKuco9NR6JIITiCfzQ=
+robpike.io/ivy v0.3.7 h1:JyGPRtg0DGrrmqQJWLqu6QDxIb9gt0AO/dejhELzzyc=
+robpike.io/ivy v0.3.7/go.mod h1:F033/ungZgZOIji0XyMA0zfFfOwi3SA8d0BsCyJp7n8=
+rsc.io/markdown v0.0.0-20240717201619-868a055c40ae h1:HcQakZADzQk1CHAKfBN7dNxRr/41J+CEEyUyFzbUa88=
+rsc.io/markdown v0.0.0-20240717201619-868a055c40ae/go.mod h1:dTYI7HoCsVAs6SKPMgkC2TV2xRFJB9WqcVydnnZby2Y=
