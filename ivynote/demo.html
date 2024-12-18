@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="ivy.css">
+<script src="ivy.js"></script>
+<title>Ivy Demo</title>
+</head>
+<body onload="ivyStartup();">
+<h1>Ivy Demo</h1>
+<p>This is the demo from <a href="https://pkg.go.dev/robpike.io/ivy">Rob Pike’s Ivy calculator</a>, running in your web browser.</p>
+<p>Each step in the demo is one line of input followed by some output from Ivy, rendered like this:</p>
+<pre><code class="language-ivy">2+2
+-- out --
+4
+</code></pre>
+<p>The first line you see above (<code>2+2</code>) is input; the next (<code>4</code>) is output from a running ivy.</p>
+<p>To execute Ivy text, click the Play button (“▶️”) next to it. Try this one:</p>
+<pre><code class="language-ivy">2*3
+</code></pre>
+<p>Whenever you like, you can edit the text yourself and then re-execute it by clicking Play again.
+If you are using a desktop computer, as an alternative to clicking Play,
+you can use Control-Enter to execute the Ivy text your cursor is editing.</p>
+<p>Let's start the actual demo.</p>
+<p>Arithmetic has the obvious operations: <code>+</code> <code>-</code> <code>*</code> etc. <code>**</code> is exponentiation. <code>mod</code> is modulo.</p>
+<pre><code class="language-ivy">23
+</code></pre>
+<pre><code class="language-ivy">23 + 45
+</code></pre>
+<pre><code class="language-ivy">23 * 45
+</code></pre>
+<pre><code class="language-ivy">23 - 45
+</code></pre>
+<pre><code class="language-ivy">7 ** 3
+</code></pre>
+<pre><code class="language-ivy">7 mod 3
+</code></pre>
+<p>Operator precedence is unusual.</p>
+<p>Unary operators operate on everything to the right.</p>
+<p>Binary operators operate on the item immediately to the left, and everything to the right.</p>
+<pre><code class="language-ivy">2*3+4     # Parsed as 2*(3+4), not the usual (2*3)+4.
+</code></pre>
+<pre><code class="language-ivy">2**2+3    # 2**5, not (2**2) + 3
+</code></pre>
+<pre><code class="language-ivy">(2**2)+3  # Use parentheses if you need to group differently.
+</code></pre>
+<p>Ivy can do rational arithmetic, so <code>1/3</code> is really 1/3, not 0.333....</p>
+<pre><code class="language-ivy">1/3
+</code></pre>
+<pre><code class="language-ivy">1/3 + 4/5
+</code></pre>
+<pre><code class="language-ivy">1/3 ** 2
+</code></pre>
+<p>We'll see non-integral exponents later.</p>
+<p>Even when a number is input in floating notation, it is still an exact rational number inside.</p>
+<pre><code class="language-ivy">1.2
+</code></pre>
+<p>In fact, ivy is a &quot;bignum&quot; calculator that can handle huge numbers and rationals made of huge numbers.</p>
+<p>These are integers:</p>
+<pre><code class="language-ivy">1e10
+</code></pre>
+<pre><code class="language-ivy">1e100
+</code></pre>
+<p>These are exact rationals:</p>
+<pre><code class="language-ivy">1e10/3
+</code></pre>
+<pre><code class="language-ivy">3/1e10
+</code></pre>
+<p>They can get pretty big:</p>
+<pre><code class="language-ivy">2**64
+</code></pre>
+<p>They can get really big:</p>
+<pre><code class="language-ivy">2**640
+</code></pre>
+<p>They can get really really big:</p>
+<pre><code class="language-ivy">2**6400
+</code></pre>
+<p>Ivy also has characters, which represent a Unicode code point.</p>
+<pre><code class="language-ivy">'x'
+</code></pre>
+<p><code>char</code> is an operator, returning the character with the given value.</p>
+<pre><code class="language-ivy">char 0x61
+</code></pre>
+<pre><code class="language-ivy">char 0x1f4a9
+</code></pre>
+<p><code>code</code> is <code>char</code>'s inverse, the value of the given character:</p>
+<pre><code class="language-ivy">code '💩'
+</code></pre>
+<p>Everything in ivy can be placed into a vector.</p>
+<p>Vectors are written and displayed with spaces between the elements.</p>
+<pre><code class="language-ivy">1 2 3
+</code></pre>
+<pre><code class="language-ivy">1 4/3 5/3 (2+1/3)
+</code></pre>
+<p>Note that without the parens, this becomes <code>(1 4/3 5/3 2)+1/3</code></p>
+<pre><code class="language-ivy">1 4/3 5/3 2+1/3
+</code></pre>
+<p>Vectors of characters print without quotes or spaces.</p>
+<pre><code class="language-ivy">'h' 'e' 'l' 'l' 'o'
+</code></pre>
+<p>This is a nicer but equivalent way to write 'h' 'e' 'l' 'l' 'o':</p>
+<pre><code class="language-ivy">'hello'
+</code></pre>
+<p>Arithmetic works elementwise on vectors.</p>
+<pre><code class="language-ivy">1 2 3 + 4 5 6
+</code></pre>
+<p>Arithmetic between scalar and vector also works, either way.</p>
+<pre><code class="language-ivy">23 + 1 2 3
+</code></pre>
+<p>Note the grouping here. A vector is a single value.</p>
+<pre><code class="language-ivy">1 2 3 + 23
+</code></pre>
+<p>More fun with scalar and vector.</p>
+<pre><code class="language-ivy">1 &lt;&lt; 1 2 3 4 5
+</code></pre>
+<pre><code class="language-ivy">(1 &lt;&lt; 1 2 3 4 5) == (2 ** 1 2 3 4 5)
+</code></pre>
+<p>Note that true is 1 and false is 0.</p>
+<p><code>iota</code> is an &quot;index generator&quot;: It counts from 1.</p>
+<pre><code class="language-ivy">iota 10
+</code></pre>
+<pre><code class="language-ivy">2 ** iota 5
+</code></pre>
+<pre><code class="language-ivy">(1 &lt;&lt; iota 100) == 2 ** iota 100
+</code></pre>
+<p>Again, notice how the precedence rules work.</p>
+<pre><code class="language-ivy">2 ** -1 + iota 32
+</code></pre>
+<p>The <code>take</code> operator removes n items from the beginning of the vector.
+A negative n takes from the end.</p>
+<pre><code class="language-ivy">3 take iota 10
+</code></pre>
+<pre><code class="language-ivy">-3 take iota 10
+</code></pre>
+<p>Drop is the other half: it drops n from the vector.</p>
+<pre><code class="language-ivy">3 drop iota 10
+</code></pre>
+<pre><code class="language-ivy">-3 drop iota 10
+</code></pre>
+<pre><code class="language-ivy">6 drop 'hello world'
+</code></pre>
+<h2>Reduction</h2>
+<pre><code class="language-ivy">iota 15
+</code></pre>
+<p>Add them up:</p>
+<pre><code class="language-ivy">1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10 + 11 + 12 + 13 + 14 + 15
+</code></pre>
+<p>Automate this by reducing <code>+</code> over the vector, like this:</p>
+<pre><code class="language-ivy">+/iota 15
+</code></pre>
+<p>We can reduce using any binary operator. This is factorial:</p>
+<pre><code class="language-ivy">1 * 2 * 3 * 4 * 5 * 6 * 7 * 8 * 9 * 10
+</code></pre>
+<pre><code class="language-ivy">*/iota 10
+</code></pre>
+<pre><code class="language-ivy">*/iota 100
+</code></pre>
+<p>Try this:</p>
+<pre><code class="language-ivy">*/iota 10000
+</code></pre>
+<p>That printed using floating-point notation for manageability, but it is still an integer inside.</p>
+<p><code>max</code> and <code>min</code> are binary operators that do the obvious. (Use semicolons to separate expressions.)</p>
+<pre><code class="language-ivy">3 max 7; 'is max and'; 3 min 7; 'is min'
+</code></pre>
+<p>Like all binary arithmetic operators, <code>max</code> applies elementwise.</p>
+<pre><code class="language-ivy">2 3 4 max 4 3 2
+</code></pre>
+<p>Reduce using <code>max</code> to find maximum element in vector.</p>
+<pre><code class="language-ivy">max/2 34 42 233 2 2 521 14 1 4 1 55 133
+</code></pre>
+<p>Ivy allows multidimensional arrays. The binary shape operator, <code>rho</code>, builds them.
+Dimension (which may be a vector) on the left, data on the right.</p>
+<pre><code class="language-ivy">5 rho 1
+</code></pre>
+<pre><code class="language-ivy">5 5 rho 1
+</code></pre>
+<pre><code class="language-ivy">5 5 rho 25
+</code></pre>
+<pre><code class="language-ivy">5 5 rho iota 25
+</code></pre>
+<pre><code class="language-ivy">3 5 5 rho iota 125
+</code></pre>
+<p>Unary <code>rho</code> tells us the shape of an item.</p>
+<pre><code class="language-ivy">x = 3 5 rho iota 15; x
+</code></pre>
+<pre><code class="language-ivy">rho x
+</code></pre>
+<pre><code class="language-ivy">x = 3 5 5 rho iota 75; x
+</code></pre>
+<pre><code class="language-ivy">rho x
+</code></pre>
+<p>Arithmetic on matrices works as you would expect by now.</p>
+<pre><code class="language-ivy">x/2
+</code></pre>
+<pre><code class="language-ivy">x**2
+</code></pre>
+<pre><code class="language-ivy">x**3
+</code></pre>
+<pre><code class="language-ivy">x**10
+</code></pre>
+<p>Inner product is written with a <code>.</code> between the operators.</p>
+<p>For a dot product, multiply corresponding elements and add the result.</p>
+<pre><code class="language-ivy">1 2 3 4 +.* 2 3 4 5
+</code></pre>
+<p>Any operator works. How many items are the same?</p>
+<pre><code class="language-ivy">(1 2 3) +.== (1 3 3)
+</code></pre>
+<p>How many differ?</p>
+<pre><code class="language-ivy">(1 2 3) +.!= (1 3 3)
+</code></pre>
+<p>Outer product generates a matrix of all combinations applying the binary operator.</p>
+<pre><code class="language-ivy">(iota 5) o.* -1 + iota 5
+</code></pre>
+<p>That's a letter 'o', dot, star.</p>
+<p>Any operator works; here is how to make an identity matrix.</p>
+<pre><code class="language-ivy">x = iota 5; x o.== x
+</code></pre>
+<p>Assignment is an operator, so you can save an intermediate expression.</p>
+<pre><code class="language-ivy">x o.== x = iota 5
+</code></pre>
+<p>Random numbers: Use a unary <code>?</code> to roll an n-sided die from 1 to n.</p>
+<pre><code class="language-ivy">?100
+</code></pre>
+<pre><code class="language-ivy">?100 100 100 100 100
+</code></pre>
+<p>Twenty rolls of a 6-sided die:</p>
+<pre><code class="language-ivy">?20 rho 6
+</code></pre>
+<p>Indexing is easy.</p>
+<pre><code class="language-ivy">print x = ?20 rho 6
+</code></pre>
+<pre><code class="language-ivy">x[1]
+</code></pre>
+<p>You can index with a vector.</p>
+<pre><code class="language-ivy">x[1 19 3]
+</code></pre>
+<p>Multiple index dimensions are separated by semicolons.</p>
+<pre><code class="language-ivy">(5 5 rho iota 25)[rot iota 5; iota 5]
+</code></pre>
+<p>The <code>up</code> and <code>down</code> operators generate index vectors that would sort the input.</p>
+<pre><code class="language-ivy">up x
+</code></pre>
+<pre><code class="language-ivy">x[up x]
+</code></pre>
+<pre><code class="language-ivy">x[down x]
+</code></pre>
+<pre><code class="language-ivy">'hello world'[up 'hello world']
+</code></pre>
+<pre><code class="language-ivy">'hello world'[down 'hello world']
+</code></pre>
+<p>More rolls of a die.</p>
+<pre><code class="language-ivy">?10 rho 6
+</code></pre>
+<p>Remember a set of rolls.</p>
+<pre><code class="language-ivy">x = ?10 rho 6; x
+</code></pre>
+<p>The outer product of <code>==</code> and the integers puts 1 in each row where that value appeared.</p>
+<p>Compare the last row of the next result to the 6s in x.</p>
+<pre><code class="language-ivy">iota 6
+x
+(iota 6) o.== x
+</code></pre>
+<p>Count the number of times each value appears by reducing the matrix horizontally.</p>
+<pre><code class="language-ivy">+/(iota 6) o.== x
+</code></pre>
+<p>Do it for a much larger set of rolls: is the die fair?</p>
+<pre><code class="language-ivy">+/(iota 6) o.== ?60000 rho 6
+</code></pre>
+<p>Remember that ivy is a big number calculator.</p>
+<pre><code class="language-ivy">*/iota 100
+</code></pre>
+<pre><code class="language-ivy">2**64
+</code></pre>
+<pre><code class="language-ivy">2**iota 64
+</code></pre>
+<pre><code class="language-ivy">-1+2**63
+</code></pre>
+<p>Settings are made and queried with a leading right paren. <code>)help</code> helps with settings and other commands.</p>
+<pre><code class="language-ivy">)help
+</code></pre>
+<p>Use <code>)base</code> to switch input and output to base 16.</p>
+<pre><code class="language-ivy">)base 16
+</code></pre>
+<pre><code class="language-ivy">)base   # The input and output for settings is always base 10.
+</code></pre>
+<p><code>_</code> is a variable that holds the most recently evaluated expression. It remembers our 63-bit number.</p>
+<pre><code class="language-ivy">_
+</code></pre>
+<p>16 powers of two (in base 16).</p>
+<pre><code class="language-ivy">1&lt;&lt;iota 10
+</code></pre>
+<p>The largest 64-bit number (in base 16).</p>
+<pre><code class="language-ivy">(2**40)-1
+</code></pre>
+<p>Output base 10, input base still 16.</p>
+<pre><code class="language-ivy">)obase 10
+</code></pre>
+<pre><code class="language-ivy">)base
+</code></pre>
+<p>The largest 64-bit number, base 10.</p>
+<pre><code class="language-ivy">-1+2**40
+</code></pre>
+<p>The largest 63-bit number, base 10.</p>
+<pre><code class="language-ivy">-1+2**3F
+</code></pre>
+<p>Go back to base 10 input and output.</p>
+<pre><code class="language-ivy">)base 10
+</code></pre>
+<p>Rationals can be very big too.</p>
+<pre><code class="language-ivy">(2**1e3)/(3**1e2)
+</code></pre>
+<p>Such output can be unwieldy. Change the output format using a Printf string.</p>
+<pre><code class="language-ivy">)format '%.12g'
+</code></pre>
+<pre><code class="language-ivy">_
+</code></pre>
+<p>We need more precision.</p>
+<pre><code class="language-ivy">)format &quot;%.100g&quot;
+</code></pre>
+<p>(Double quotes work for strings too; there's no difference.)</p>
+<pre><code class="language-ivy">_
+</code></pre>
+<pre><code class="language-ivy">)format '%#x'
+</code></pre>
+<pre><code class="language-ivy">_
+</code></pre>
+<p>A nice format, easily available on the command line with <code>ivy -g</code>:</p>
+<pre><code class="language-ivy">)format '%.12g'
+</code></pre>
+<pre><code class="language-ivy">_
+</code></pre>
+<pre><code class="language-ivy">(3 4 rho iota 12)/4
+</code></pre>
+<p>Irrational functions cannot be represented precisely by rational numbers.</p>
+<p>Ivy stores irrational results in high-precision (default 256-bit) floating point numbers.</p>
+<pre><code class="language-ivy">sqrt 2
+</code></pre>
+<p><code>pi</code> and <code>e</code> are built-in, high-precision constants.</p>
+<pre><code class="language-ivy">pi
+</code></pre>
+<pre><code class="language-ivy">e
+</code></pre>
+<pre><code class="language-ivy">)format &quot;%.100g&quot;
+</code></pre>
+<pre><code class="language-ivy">pi
+</code></pre>
+<pre><code class="language-ivy">)format '%.12g'
+</code></pre>
+<pre><code class="language-ivy">pi
+</code></pre>
+<p>Exponentials and logarithms.</p>
+<p>Note: Non-integral exponent generates irrational result.</p>
+<pre><code class="language-ivy">2**1/2
+</code></pre>
+<pre><code class="language-ivy">e**1e6
+</code></pre>
+<pre><code class="language-ivy">log e**1e6
+</code></pre>
+<pre><code class="language-ivy">log e**1e8
+</code></pre>
+<pre><code class="language-ivy">log 1e1000000
+</code></pre>
+<p>Yes, that is 10 to the millionth power!</p>
+<p>Transcendentals. (The low bit isn't always right...)</p>
+<pre><code class="language-ivy">sin pi/2
+</code></pre>
+<pre><code class="language-ivy">cos .25*pi * -1 + iota 9
+</code></pre>
+<pre><code class="language-ivy">log iota 6
+</code></pre>
+<p>Successive approximations to e. (We force the calculation to use float using the &quot;float&quot; unary operator. Why?)</p>
+<pre><code class="language-ivy">(float 1+10**-iota 9) ** 10**iota 9
+</code></pre>
+<p>Default precision is 256 bits of mantissa. We can go up to 10000.</p>
+<p>Precision units are bits, not digits. <code>1000 * 2 log 10</code> is 3321; we add a few more bits for floating point errors.</p>
+<pre><code class="language-ivy">)prec 3350
+</code></pre>
+<pre><code class="language-ivy">e
+</code></pre>
+<p>The units for formatting are digits, not bits. (Sorry for the inconsistency.)</p>
+<pre><code class="language-ivy">)format '%.1000g'
+</code></pre>
+<pre><code class="language-ivy">e
+</code></pre>
+<pre><code class="language-ivy">pi
+</code></pre>
+<pre><code class="language-ivy">sqrt 2
+</code></pre>
+<pre><code class="language-ivy">e**1e6
+</code></pre>
+<pre><code class="language-ivy">log e**1e6
+</code></pre>
+<pre><code class="language-ivy">(2**1e3)/(3**1e2)
+</code></pre>
+<p>User-defined operators are declared as unary or binary (or both). This one computes the (unary) average.</p>
+<pre><code class="language-ivy">op avg x = (+/x)/rho x
+</code></pre>
+<pre><code class="language-ivy">avg iota 100
+</code></pre>
+<p>Here is a binary operator.</p>
+<pre><code class="language-ivy">op n largest x = n take x[down x]
+</code></pre>
+<pre><code class="language-ivy">3 largest ? 100 rho 1000
+</code></pre>
+<pre><code class="language-ivy">4 largest 'hello world'
+</code></pre>
+<p>Population count. Use <code>encode</code> to turn the value into a string of bits. Use <code>log</code> to decide how many.</p>
+<pre><code class="language-ivy">op a base b = ((ceil b log a) rho b) encode a
+</code></pre>
+<pre><code class="language-ivy">7 base 2
+</code></pre>
+<pre><code class="language-ivy">op popcount n = +/n base 2
+</code></pre>
+<pre><code class="language-ivy">popcount 7
+</code></pre>
+<pre><code class="language-ivy">popcount 1e6
+</code></pre>
+<pre><code class="language-ivy">popcount 1e100
+</code></pre>
+<p>Here is one to sum the digits. The unary operator <code>text</code> turns its argument into text, like <a href="https://go.dev/pkg/fmt/#Sprint">fmt.Sprint</a>.</p>
+<pre><code class="language-ivy">op sumdigits x = t = text x; +/(code (t in '0123456789') sel t) - code '0'
+</code></pre>
+<p>Break it down:  The <code>sel</code> operator selects from the right based on the non-zero elements in the left.</p>
+<p>The <code>in</code> operator generates a selector by choosing only the bytes that are ASCII digits.</p>
+<pre><code class="language-ivy">sumdigits 99
+</code></pre>
+<pre><code class="language-ivy">sumdigits iota 10
+</code></pre>
+<pre><code class="language-ivy">sumdigits '23 skidoo'
+</code></pre>
+<p>In the last example, note that <code>sumdigits</code> only counts the digits.</p>
+<p>The binary <code>text</code> operator takes a format string (<code>%</code> optional) on the left and formats the value.</p>
+<pre><code class="language-ivy">'%x' text 1234
+</code></pre>
+<p>We can use this for another version of popcount: <code>%b</code> is binary.</p>
+<pre><code class="language-ivy">op popcount n = +/'1' == '%b' text n
+</code></pre>
+<pre><code class="language-ivy">popcount 7
+</code></pre>
+<pre><code class="language-ivy">popcount 1e6
+</code></pre>
+<pre><code class="language-ivy">popcount 1e100
+</code></pre>
+<p>A classic (expensive!) algorithm to count primes.</p>
+<pre><code class="language-ivy">op primes N = (not T in T o.* T) sel T = 1 drop iota N
+</code></pre>
+<p>The assignment to <code>T</code> gives 2..N. We use outer product to build an array of all products.</p>
+<p>Then we find all elements of <code>T</code> that appear in the product matrix, invert that, and select from the original.</p>
+<pre><code class="language-ivy">primes 100
+</code></pre>
+<p>A final trick.</p>
+<p>The binary <code>?</code> operator &quot;deals&quot;: <code>x?y</code> selects at random x distinct integers from 1..y inclusive.</p>
+<pre><code class="language-ivy">5?10
+</code></pre>
+<p>We can use this to shuffle a deck of cards. The suits are &quot;♠♡♣♢&quot;, the values &quot;A234567890JQK&quot; (using 0 for 10, for simplicity).</p>
+<p>Create the deck using outer product with the ravel operator:</p>
+<pre><code class="language-ivy">&quot;A234567890JQK&quot; o., &quot;♠♡♣♢&quot;
+</code></pre>
+<p>To shuffle it, ravel into into a vector and index that by 1 through 52, shuffled.</p>
+<pre><code class="language-ivy">(, &quot;A234567890JQK&quot; o., &quot;♠♡♣♢&quot;)[52?52]
+</code></pre>
+<p>There is no looping construct in ivy, but there is a conditional evaluator.</p>
+<p>Within a user-defined operator, one can write a condition expression
+using a binary operator, ‘<code>:</code>’. If the left-hand operand is true (integer non-zero),
+the user-defined operator will return the right-hand operand as its
+result; otherwise execution continues.</p>
+<pre><code class="language-ivy">op a gcd b = a == b: a; a &gt; b: b gcd a-b; a gcd b-a
+</code></pre>
+<pre><code class="language-ivy">994 gcd !7
+</code></pre>
+<p>That's it! Have fun.</p>
+<p>For more information visit <a href="https://pkg.go.dev/robpike.io/ivy">https://pkg.go.dev/robpike.io/ivy</a>.</p>

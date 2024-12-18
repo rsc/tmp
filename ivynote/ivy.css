@@ -1,0 +1,68 @@
+body {
+	margin: 20px;
+}
+
+.in { background: #ccc; }
+
+.ivyRun, .ivyBottomRun {
+	margin: 1em;
+	display: flex;
+	align-items: flex-start;
+}
+.ivyRunButton, .ivyBottomRunButton {
+	background: none;
+	color: inherit;
+	border: none;
+	padding: 0;
+	font: inherit;
+	cursor: pointer;
+	outline: inherit;
+	margin-right: 5px;
+}
+.ivyRunText, .ivyBottomRunText {
+	flex-grow: 1;
+	border: 1px solid #ccc;
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+}
+.ivyRunIn, .ivyBottomRunIn {
+	outline: none;
+	border: none;
+	resize: none;
+	overflow: hidden;
+	height: auto;
+	padding: 4px 0 4px 0;
+	width: 100%;
+	background-color: #e9ffff;
+	border-bottom: 1px solid #aaffff;
+}
+.ivyRunOut, .ivyRunErr {
+	margin: 0;
+	padding: 4px 0 4px 0;
+	white-space: pre-wrap;
+	word-wrap: break-word;
+}
+.ivyRunOut {
+	background-color: #ffffe9;
+	width: 100%;
+}
+.ivyRunErr {
+	background-color: #ffe9e9;
+	width: 100%;
+}
+.ivyRunOut:empty, .ivyRunErr:empty {
+	padding: 0;
+}
+
+.ivyRun:has(+ .ivyRun) {
+	margin-bottom: 0;
+}
+
+.ivyRun + .ivyRun {
+	margin-top: -1px;
+}
+
+.out, .err {
+	margin: 0;
+}
