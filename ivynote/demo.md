@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="format-detection" content="telephone=no">
 <link rel="stylesheet" href="ivy.css">
 <script src="ivy.js"></script>
 <title>Ivy Demo</title>
@@ -11,7 +12,7 @@
 
 # Ivy Demo
 
-This is a demo of Ivy, running in your web browser.
+This is the demo from [Rob Pike's Ivy calculator](https://pkg.go.dev/robpike.io/ivy), running in your web browser.
 
 Each step in the demo is one line of input followed by some output from Ivy, rendered like this:
 
@@ -917,7 +918,7 @@ op a gcd b = a == b: a; a > b: b gcd a-b; a gcd b-a
 ```
 
 ```ivy
-1562 gcd !11
+994 gcd !7
 ```
 
 That's it! Have fun.
