@@ -153,7 +153,7 @@ var finput *bufio.Reader // input file
 var stderr *bufio.Writer
 var ftable *bufio.Writer    // y.go file
 var fcode = &bytes.Buffer{} // saved code
-var foutput *bufio.Writer   // y.output file
+var youtput *bufio.Writer   // y.output file
 
 var fmtImported bool // output file has recorded an import of "fmt"
 
@@ -374,7 +374,7 @@ func setup() {
 	var j, ty int
 
 	stderr = bufio.NewWriter(os.Stderr)
-	foutput = nil
+	youtput = nil
 
 	flag.Parse()
 	if flag.NArg() != 1 {
@@ -1445,10 +1445,10 @@ func openup() {
 		errorf("cannot open %v", infile)
 	}
 
-	foutput = nil
+	youtput = nil
 	if vflag != "" {
-		foutput = create(vflag)
-		if foutput == nil {
+		youtput = create(vflag)
+		if youtput == nil {
 			errorf("can't create file %v", vflag)
 		}
 	}
@@ -1665,9 +1665,9 @@ func cpfir() {
 	if indebug == 0 {
 		return
 	}
-	if foutput != nil {
+	if youtput != nil {
 		for i = 0; i <= nnonter; i++ {
-			fmt.Fprintf(foutput, "\n%v: %v %v\n",
+			fmt.Fprintf(youtput, "\n%v: %v %v\n",
 				nontrst[i].name, pfirst[i], pempty[i])
 		}
 	}
@@ -1744,14 +1744,14 @@ func stagen() {
 				}
 			}
 
-			if gsdebug != 0 && foutput != nil {
-				fmt.Fprintf(foutput, "%v: ", i)
+			if gsdebug != 0 && youtput != nil {
+				fmt.Fprintf(youtput, "%v: ", i)
 				for j := 0; j <= nnonter; j++ {
 					if temp1[j] != 0 {
-						fmt.Fprintf(foutput, "%v %v,", nontrst[j].name, temp1[j])
+						fmt.Fprintf(youtput, "%v %v,", nontrst[j].name, temp1[j])
 					}
 				}
-				fmt.Fprintf(foutput, "\n")
+				fmt.Fprintf(youtput, "\n")
 			}
 
 			if first != 0 {
@@ -1879,16 +1879,16 @@ func closure(i int) {
 	}
 
 	// have computed closure; flags are reset; return
-	if cldebug != 0 && foutput != nil {
-		fmt.Fprintf(foutput, "\nState %v, nolook = %v\n", i, nolook)
+	if cldebug != 0 && youtput != nil {
+		fmt.Fprintf(youtput, "\nState %v, nolook = %v\n", i, nolook)
 		for u := 0; u < cwp; u++ {
 			if wsets[u].flag != 0 {
-				fmt.Fprintf(foutput, "flag set\n")
+				fmt.Fprintf(youtput, "flag set\n")
 			}
 			wsets[u].flag = 0
-			fmt.Fprintf(foutput, "\t%v", writem(wsets[u].pitem))
+			fmt.Fprintf(youtput, "\t%v", writem(wsets[u].pitem))
 			prlook(wsets[u].ws)
-			fmt.Fprintf(foutput, "\n")
+			fmt.Fprintf(youtput, "\n")
 		}
 	}
 }
@@ -1987,8 +1987,8 @@ func putitem(p Pitem, set Lkset) {
 	p.off++
 	p.first = p.prod[p.off]
 
-	if pidebug != 0 && foutput != nil {
-		fmt.Fprintf(foutput, "putitem(%v), state %v\n", writem(p), nstate)
+	if pidebug != 0 && youtput != nil {
+		fmt.Fprintf(youtput, "putitem(%v), state %v\n", writem(p), nstate)
 	}
 	j := pstate[nstate+1]
 	if j >= len(statemem) {
@@ -2077,8 +2077,8 @@ nextk:
 		}
 
 		// we have found an acceptable k
-		if pkdebug != 0 && foutput != nil {
-			fmt.Fprintf(foutput, "off = %v, k = %v\n", off+rr, rr)
+		if pkdebug != 0 && youtput != nil {
+			fmt.Fprintf(youtput, "off = %v, k = %v\n", off+rr, rr)
 		}
 		qq = rr
 		for pp = 0; pp < len(p); pp++ {
@@ -2090,13 +2090,13 @@ nextk:
 			}
 			qq++
 		}
-		if pkdebug != 0 && foutput != nil {
+		if pkdebug != 0 && youtput != nil {
 			for pp = 0; pp <= memp; pp += 10 {
-				fmt.Fprintf(foutput, "\n")
+				fmt.Fprintf(youtput, "\n")
 				for qq = pp; qq <= pp+9; qq++ {
-					fmt.Fprintf(foutput, "%v ", amem[qq])
+					fmt.Fprintf(youtput, "%v ", amem[qq])
 				}
-				fmt.Fprintf(foutput, "\n")
+				fmt.Fprintf(youtput, "\n")
 			}
 		}
 		return off + rr
@@ -2169,8 +2169,8 @@ func output() {
 				if temp1[k] == 0 {
 					temp1[k] = c
 				} else if temp1[k] < 0 { // reduce/reduce conflict
-					if foutput != nil {
-						fmt.Fprintf(foutput,
+					if youtput != nil {
+						fmt.Fprintf(youtput,
 							"\n %v: reduce/reduce conflict  (red'ns "+
 								"%v and %v) on %v",
 							i, -temp1[k], lastred, symnam(k))
@@ -2205,8 +2205,8 @@ func precftn(r, t, s int) {
 	lt := toklev[t]
 	if PLEVEL(lt) == 0 || PLEVEL(lp) == 0 {
 		// conflict
-		if foutput != nil {
-			fmt.Fprintf(foutput,
+		if youtput != nil {
+			fmt.Fprintf(youtput,
 				"\n%v: shift/reduce conflict (shift %v(%v), red'n %v(%v)) on %v",
 				s, temp1[t], PLEVEL(lt), r, PLEVEL(lp), symnam(t))
 		}
@@ -2332,19 +2332,19 @@ func wrstate(i int) {
 		stateTable[i] = Row{actions, defaultAction}
 	}
 
-	if foutput == nil {
+	if youtput == nil {
 		return
 	}
-	fmt.Fprintf(foutput, "\nstate %v\n", i)
+	fmt.Fprintf(youtput, "\nstate %v\n", i)
 	qq = pstate[i+1]
 	for pp = pstate[i]; pp < qq; pp++ {
-		fmt.Fprintf(foutput, "\t%v\n", writem(statemem[pp].pitem))
+		fmt.Fprintf(youtput, "\t%v\n", writem(statemem[pp].pitem))
 	}
 	if tystate[i] == MUSTLOOKAHEAD {
 		// print out empty productions in closure
 		for u = pstate[i+1] - pstate[i]; u < cwp; u++ {
 			if wsets[u].pitem.first < 0 {
-				fmt.Fprintf(foutput, "\t%v\n", writem(wsets[u].pitem))
+				fmt.Fprintf(youtput, "\t%v\n", writem(wsets[u].pitem))
 			}
 		}
 	}
@@ -2353,29 +2353,29 @@ func wrstate(i int) {
 	for j0 = 0; j0 <= ntokens; j0++ {
 		j1 = temp1[j0]
 		if j1 != 0 {
-			fmt.Fprintf(foutput, "\n\t%v  ", symnam(j0))
+			fmt.Fprintf(youtput, "\n\t%v  ", symnam(j0))
 
 			// shift, error, or accept
 			if j1 > 0 {
 				if j1 == ACCEPTCODE {
-					fmt.Fprintf(foutput, "accept")
+					fmt.Fprintf(youtput, "accept")
 				} else if j1 == ERRCODE {
-					fmt.Fprintf(foutput, "error")
+					fmt.Fprintf(youtput, "error")
 				} else {
-					fmt.Fprintf(foutput, "shift %v", j1)
+					fmt.Fprintf(youtput, "shift %v", j1)
 				}
 			} else {
-				fmt.Fprintf(foutput, "reduce %v (src line %v)", -j1, rlines[-j1])
+				fmt.Fprintf(youtput, "reduce %v (src line %v)", -j1, rlines[-j1])
 			}
 		}
 	}
 
 	// output the final production
 	if lastred != 0 {
-		fmt.Fprintf(foutput, "\n\t.  reduce %v (src line %v)\n\n",
+		fmt.Fprintf(youtput, "\n\t.  reduce %v (src line %v)\n\n",
 			lastred, rlines[lastred])
 	} else {
-		fmt.Fprintf(foutput, "\n\t.  error\n\n")
+		fmt.Fprintf(youtput, "\n\t.  error\n\n")
 	}
 
 	// now, output nonterminal actions
@@ -2383,7 +2383,7 @@ func wrstate(i int) {
 	for j0 = 1; j0 <= nnonter; j0++ {
 		j1++
 		if temp1[j1] != 0 {
-			fmt.Fprintf(foutput, "\t%v  goto %v\n", symnam(j0+NTBASE), temp1[j1])
+			fmt.Fprintf(youtput, "\t%v  goto %v\n", symnam(j0+NTBASE), temp1[j1])
 		}
 	}
 }
@@ -2476,14 +2476,14 @@ func go2gen(c int) {
 	}
 
 	// now, we have temp1[c] = 1 if a goto on c in closure of cc
-	if g2debug != 0 && foutput != nil {
-		fmt.Fprintf(foutput, "%v: gotos on ", nontrst[c].name)
+	if g2debug != 0 && youtput != nil {
+		fmt.Fprintf(youtput, "%v: gotos on ", nontrst[c].name)
 		for i = 0; i <= nnonter; i++ {
 			if temp1[i] != 0 {
-				fmt.Fprintf(foutput, "%v ", nontrst[i].name)
+				fmt.Fprintf(youtput, "%v ", nontrst[i].name)
 			}
 		}
-		fmt.Fprintf(foutput, "\n")
+		fmt.Fprintf(youtput, "\n")
 	}
 
 	// now, go through and put gotos into tystate
@@ -2512,8 +2512,8 @@ func hideprod() {
 	levprd[0] = 0
 	for i := 1; i < nprod; i++ {
 		if (levprd[i] & REDFLAG) == 0 {
-			if foutput != nil {
-				fmt.Fprintf(foutput, "Rule not reduced: %v\n",
+			if youtput != nil {
+				fmt.Fprintf(youtput, "Rule not reduced: %v\n",
 					writem(Pitem{prdptr[i], 0, 0, i}))
 			}
 			fmt.Printf("rule %v never reduced\n", writem(Pitem{prdptr[i], 0, 0, i}))
@@ -3004,16 +3004,16 @@ func arout(s string, v []int, n int) {
 
 // output the summary on y.output
 func summary() {
-	if foutput != nil {
-		fmt.Fprintf(foutput, "\n%v terminals, %v nonterminals\n", ntokens, nnonter+1)
-		fmt.Fprintf(foutput, "%v grammar rules, %v/%v states\n", nprod, nstate, NSTATES)
-		fmt.Fprintf(foutput, "%v shift/reduce, %v reduce/reduce conflicts reported\n", zzsrconf, zzrrconf)
-		fmt.Fprintf(foutput, "%v working sets used\n", len(wsets))
-		fmt.Fprintf(foutput, "memory: parser %v/%v\n", memp, ACTSIZE)
-		fmt.Fprintf(foutput, "%v extra closures\n", zzclose-2*nstate)
-		fmt.Fprintf(foutput, "%v shift entries, %v exceptions\n", zzacent, zzexcp)
-		fmt.Fprintf(foutput, "%v goto entries\n", zzgoent)
-		fmt.Fprintf(foutput, "%v entries saved by goto default\n", zzgobest)
+	if youtput != nil {
+		fmt.Fprintf(youtput, "\n%v terminals, %v nonterminals\n", ntokens, nnonter+1)
+		fmt.Fprintf(youtput, "%v grammar rules, %v/%v states\n", nprod, nstate, NSTATES)
+		fmt.Fprintf(youtput, "%v shift/reduce, %v reduce/reduce conflicts reported\n", zzsrconf, zzrrconf)
+		fmt.Fprintf(youtput, "%v working sets used\n", len(wsets))
+		fmt.Fprintf(youtput, "memory: parser %v/%v\n", memp, ACTSIZE)
+		fmt.Fprintf(youtput, "%v extra closures\n", zzclose-2*nstate)
+		fmt.Fprintf(youtput, "%v shift entries, %v exceptions\n", zzacent, zzexcp)
+		fmt.Fprintf(youtput, "%v goto entries\n", zzgoent)
+		fmt.Fprintf(youtput, "%v entries saved by goto default\n", zzgobest)
 	}
 	if zzsrconf != 0 || zzrrconf != 0 {
 		fmt.Printf("\nconflicts: ")
@@ -3032,7 +3032,7 @@ func summary() {
 
 // write optimizer summary
 func osummary() {
-	if foutput == nil {
+	if youtput == nil {
 		return
 	}
 	i := 0
@@ -3042,9 +3042,9 @@ func osummary() {
 		}
 	}
 
-	fmt.Fprintf(foutput, "Optimizer space used: output %v/%v\n", maxa+1, ACTSIZE)
-	fmt.Fprintf(foutput, "%v table entries, %v zero\n", maxa+1, i)
-	fmt.Fprintf(foutput, "maximum spread: %v, maximum offset: %v\n", maxspr, maxoff)
+	fmt.Fprintf(youtput, "Optimizer space used: output %v/%v\n", maxa+1, ACTSIZE)
+	fmt.Fprintf(youtput, "%v table entries, %v zero\n", maxa+1, i)
+	fmt.Fprintf(youtput, "maximum spread: %v, maximum offset: %v\n", maxspr, maxoff)
 }
 
 // copies and protects "'s in q
@@ -3089,16 +3089,16 @@ func setunion(a, b []int) int {
 
 func prlook(p Lkset) {
 	if p == nil {
-		fmt.Fprintf(foutput, "\tNULL")
+		fmt.Fprintf(youtput, "\tNULL")
 		return
 	}
-	fmt.Fprintf(foutput, " { ")
+	fmt.Fprintf(youtput, " { ")
 	for j := 0; j <= ntokens; j++ {
 		if bitset(p, j) != 0 {
-			fmt.Fprintf(foutput, "%v ", symnam(j))
+			fmt.Fprintf(youtput, "%v ", symnam(j))
 		}
 	}
-	fmt.Fprintf(foutput, "}")
+	fmt.Fprintf(youtput, "}")
 }
 
 // utility routines
