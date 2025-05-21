@@ -46,7 +46,7 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"regexp"
@@ -126,7 +126,7 @@ func main() {
 }
 
 func convert(f *os.File) {
-	data, err := ioutil.ReadAll(f)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		log.Fatalf("%s: reading: %v", f.Name(), err)
 		return

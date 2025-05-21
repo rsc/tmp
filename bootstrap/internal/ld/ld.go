@@ -34,13 +34,13 @@
 package ld
 
 import (
-	"rsc.io/tmp/bootstrap/internal/obj"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+
+	"rsc.io/tmp/bootstrap/internal/obj"
 )
 
 func addlib(ctxt *Link, src string, obj string, pathname string) {
@@ -118,7 +118,7 @@ func addlibpath(ctxt *Link, srcref string, objref string, file string, pkg strin
 	l.File = file
 	l.Pkg = pkg
 	if shlibnamefile != "" {
-		shlibbytes, err := ioutil.ReadFile(shlibnamefile)
+		shlibbytes, err := os.ReadFile(shlibnamefile)
 		if err != nil {
 			Diag("cannot read %s: %v", shlibnamefile, err)
 		}
