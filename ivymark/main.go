@@ -110,12 +110,15 @@ func update(doc *markdown.Document) {
 	context := exec.NewContext(&conf)
 
 	for code := range codeBlocks(doc) {
+		if code.Info != "ivy" {
+			continue
+		}
 		text := strings.Join(code.Text, "\n")
 		text, _, _ = strings.Cut(text, "\n-- err --\n")
 		text, _, _ = strings.Cut(text, "\n-- out --\n")
 		text = addNL(text)
 		if text != "" {
-			scanner := scan.New(context, "input", strings.NewReader(text))
+			scanner := scan.New(context, "input", strings.NewReader(text+"\n\n"))
 			parser := parse.NewParser("input", scanner, context)
 			outBuf.Reset()
 			errBuf.Reset()
