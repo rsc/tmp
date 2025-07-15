@@ -21,34 +21,51 @@
 // The -k flag specifies the name of a file containing the Gemini API key
 // (default $HOME/.geminikey).
 //
-// [Google's Gemini API]: https://developers.generativeai.google/
+// [Google's Gemini API]: https://ai.google.dev/gemini-api/docs
 package main
 
 import (
 	"bufio"
-	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"time"
+
+	"google.golang.org/genai"
+	"rsc.io/tmp/gemini/internal/schema"
 )
 
 var (
-	home, _  = os.UserHomeDir()
-	key      string
-	lineMode = flag.Bool("l", false, "line at a time mode")
-	keyFile  = flag.String("k", filepath.Join(home, ".geminikey"), "read gemini API key from `file`")
-	model    = flag.String("m", "", "use gemini `model`") // gemini-1.5-pro-latest is only in free mode
-	embed    = flag.Bool("e", false, "print embedding")
+	home, _ = os.UserHomeDir()
+	key     string
+	keyFile = flag.String("k", filepath.Join(home, ".geminikey"), "read gemini API key from `file`")
+	model   = flag.String("m", "gemini-2.5-flash", "use gemini `model`")
+
+	flagCode        = flag.Bool("code", false, "enable code execution tool (on Gemini servers)")
+	flagComputer    = flag.Bool("computer", false, "enable computer use tool")
+	flagMaps        = flag.Bool("maps", false, "enable Google Maps tool") // not supported in Gemini API
+	flagGoogle      = flag.Bool("google", false, "enable Google Search tool")
+	flagGoogleRAG   = flag.Bool("googlerag", false, "enable Google Search Retrieval tool") // not supported (in Gemini API?)
+	flagURLs        = flag.Bool("urls", false, "enable URL context retrieval tool")
+	flagSys         = flag.String("sys", "", "use `text` as system instruction")
+	flagSysFile     = flag.String("sysfile", "", "read system instruction from `file`")
+	flagThink       = flag.Bool("think", false, "show thoughts")
+	flagThinkBudget = flag.Int("thinkbudget", -1, "set thinking budget to `N` tokens (< 0 is unlimited)")
+	flagMaxOutput   = flag.Int("maxoutput", -1, "set output limit to `N` tokens (≤ 0 is unlimited)")
+	flagSeed        = flag.Int("seed", -1, "use random seed `N`")
+	flagRot13       = flag.Bool("rot13", false, "enable local rot13 tool")
+	flagAttach      = flag.String("a", "", "attach `file` to request")
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: gemini [-e] [-l] [-k keyfile] [-m model]\n")
+	fmt.Fprintf(os.Stderr, "usage: gemini [options] [prompt]\n")
 	os.Exit(2)
 }
 
@@ -58,156 +75,245 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
+	ctx := context.Background()
 	data, err := os.ReadFile(*keyFile)
 	if err != nil {
 		log.Fatal(err)
 	}
 	key = strings.TrimSpace(string(data))
 
-	do := generateContent
-	if *embed {
-		do = embedContent
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  key,
+		Backend: genai.BackendGeminiAPI,
+	})
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	if *lineMode {
-		if flag.NArg() != 0 {
-			log.Fatalf("-l cannot be used with arguments")
-		}
-		scanner := bufio.NewScanner(os.Stdin)
-		for {
-			fmt.Fprintf(os.Stderr, "> ")
-			if !scanner.Scan() {
-				break
-			}
-			line := scanner.Text()
-			fmt.Fprintf(os.Stderr, "\n")
-			do(line)
-			fmt.Fprintf(os.Stderr, "\n")
-		}
-		return
-	}
+	config := &genai.GenerateContentConfig{
+		CandidateCount: 1,
 
-	if flag.NArg() != 0 {
-		do(strings.Join(flag.Args(), " "))
-	} else {
-		data, err := io.ReadAll(os.Stdin)
+		// // Optional. List of strings that tells the model to stop generating text if one
+		// // of the strings is encountered in the response.
+		// StopSequences []string `json:"stopSequences,omitempty"`
+
+		// // Optional. Output response mimetype of the generated candidate text.
+		// // Supported mimetype:
+		// //   - `text/plain`: (default) Text output.
+		// //   - `application/json`: JSON response in the candidates.
+		// // The model needs to be prompted to output the appropriate response type,
+		// // otherwise the behavior is undefined.
+		// // This is a preview feature.
+		// ResponseMIMEType string `json:"responseMimeType,omitempty"`
+
+		// // Optional. The `Schema` object allows the definition of input and output data types.
+		// // These types can be objects, but also primitives and arrays.
+		// // Represents a select subset of an [OpenAPI 3.0 schema
+		// // object](https://spec.openapis.org/oas/v3.0.3#schema).
+		// // If set, a compatible response_mime_type must also be set.
+		// // Compatible mimetypes: `application/json`: Schema for JSON response.
+		// ResponseSchema *Schema `json:"responseSchema,omitempty"`
+
+		// // Optional. Safety settings in the request to block unsafe content in the
+		// // response.
+		// SafetySettings []*SafetySetting `json:"safetySettings,omitempty"`
+
+		// // Optional. Code that enables the system to interact with external systems to
+		// // perform an action outside of the knowledge and scope of the model.
+		// Tools []*Tool `json:"tools,omitempty"`
+
+		// // Optional. Associates model output to a specific function call.
+		// ToolConfig *ToolConfig `json:"toolConfig,omitempty"`
+	}
+	if *flagSeed >= 0 {
+		config.Seed = ptr(int32(*flagSeed))
+	}
+	if *flagSysFile != "" {
+		data, err := os.ReadFile(*flagSysFile)
 		if err != nil {
 			log.Fatal(err)
 		}
-		do(string(data))
+		config.SystemInstruction = genai.Text(string(data))[0]
 	}
-}
-
-func embedContent(prompt string) {
-	if *model == "" {
-		*model = "text-embedding-004"
-	}
-	// TODO title
-	js, err := json.Marshal(map[string]map[string][]map[string]string{"content": {"parts": {{"text": prompt}}}})
-	if err != nil {
-		log.Fatal(err)
-	}
-	resp, err := http.Post("https://generativelanguage.googleapis.com/v1beta/models/"+*model+":embedContent?key="+key, "application/json", bytes.NewReader(js))
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err != nil {
-		log.Fatal(err)
-	}
-	data, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		log.Fatalf("%s:\n%s", resp.Status, data)
-	}
-	if err != nil {
-		log.Fatalf("reading body: %v", err)
-	}
-
-	var r EmbedResponse
-	if err := json.Unmarshal(data, &r); err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("%v\n", r.Embedding.Values)
-}
-
-type EmbedResponse struct {
-	Embedding struct {
-		Values []float64
-	}
-}
-
-func generateContent(prompt string) {
-	if *model == "" {
-		*model = "gemini-pro"
-	}
-	// curl \
-	// -H 'Content-Type: application/json' \
-	// -d '{ "prompt": { "text": "Write a story about a magic backpack"} }' \
-	// "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=YOUR_API_KEY"
-
-	js, err := json.Marshal(map[string][]map[string][]map[string]string{"contents": {{"parts": {{"text": prompt}}}}})
-	if err != nil {
-		log.Fatal(err)
-	}
-	resp, err := http.Post("https://generativelanguage.googleapis.com/v1beta/models/"+*model+":generateContent?key="+key, "application/json", bytes.NewReader(js))
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err != nil {
-		log.Fatal(err)
-	}
-	data, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		log.Fatalf("%s:\n%s", resp.Status, data)
-	}
-	if err != nil {
-		log.Fatalf("reading body: %v", err)
-	}
-
-	var r Response
-	if err := json.Unmarshal(data, &r); err != nil {
-		log.Fatal(err)
-	}
-	if len(r.Candidates) == 0 {
-		fmt.Fprintf(os.Stderr, "no candidate answers")
-	}
-	seen := 0
-	for _, c := range r.Candidates {
-		if len(c.Content.Parts) == 0 {
-			continue
+	if *flagSys != "" {
+		if config.SystemInstruction == nil {
+			config.SystemInstruction = genai.Text(*flagSys)[0]
+		} else {
+			config.SystemInstruction.Parts = append(config.SystemInstruction.Parts, genai.Text(*flagSys)[0].Parts...)
 		}
-		seen++
-		fmt.Printf("%s\n", c.Content.Parts[0].Text)
-		for _, rate := range c.SafetyRatings {
-			if rate.Probability != "NEGLIGIBLE" {
-				fmt.Printf("%s=%s\n", rate.Category, rate.Probability)
+	}
+	if *flagMaxOutput > 0 {
+		config.MaxOutputTokens = int32(*flagMaxOutput)
+	}
+	if *flagThink || *flagThinkBudget >= 0 {
+		config.ThinkingConfig = &genai.ThinkingConfig{
+			IncludeThoughts: *flagThink,
+		}
+		if *flagThinkBudget >= 0 {
+			config.ThinkingConfig.ThinkingBudget = ptr(int32(*flagThinkBudget))
+		}
+	}
+	if *flagCode {
+		config.Tools = append(config.Tools, &genai.Tool{CodeExecution: &genai.ToolCodeExecution{}})
+	}
+	if *flagComputer {
+		// This seems to do nothing.
+		config.Tools = append(config.Tools, &genai.Tool{ComputerUse: &genai.ToolComputerUse{Environment: genai.EnvironmentBrowser}})
+	}
+	if *flagMaps {
+		config.Tools = append(config.Tools, &genai.Tool{GoogleMaps: &genai.GoogleMaps{}})
+	}
+	if *flagGoogle {
+		config.Tools = append(config.Tools, &genai.Tool{GoogleSearch: &genai.GoogleSearch{}})
+	}
+	if *flagGoogleRAG {
+		config.Tools = append(config.Tools, &genai.Tool{GoogleSearchRetrieval: &genai.GoogleSearchRetrieval{DynamicRetrievalConfig: &genai.DynamicRetrievalConfig{Mode: genai.DynamicRetrievalConfigModeDynamic}}})
+	}
+	if *flagURLs {
+		config.Tools = append(config.Tools, &genai.Tool{URLContext: &genai.URLContext{}})
+	}
+	if *flagRot13 {
+		config.Tools = append(config.Tools, rot13Tool)
+	}
+
+	debugPrint(config)
+
+	first := true
+	var script []*genai.Content
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Fprintf(os.Stderr, "> ")
+		if !scanner.Scan() {
+			break
+		}
+		line := scanner.Text()
+		fmt.Fprintf(os.Stderr, "\n")
+		content := &genai.Content{Role: "user"}
+		if first {
+			first = false
+			if *flagAttach != "" {
+				data, err := os.ReadFile(*flagAttach)
+				if err != nil {
+					log.Fatal(err)
+				}
+				typ := http.DetectContentType(data)
+				content.Parts = append(content.Parts, &genai.Part{InlineData: &genai.Blob{Data: data, MIMEType: typ}})
 			}
 		}
+		content.Parts = append(content.Parts, &genai.Part{Text: line})
+		script = append(script, content)
+	Resend:
+		start := time.Now()
+		debugPrint(script)
+		r, err := client.Models.GenerateContent(ctx, *model, script, config)
+		if err != nil {
+			log.Fatal(err)
+		}
+		dt := time.Since(start)
+		usage := r.UsageMetadata
+		fmt.Fprintf(os.Stderr, "# %din+%dthink+%dtool+%dout=%d tokens (%d cached), %.1fs\n", usage.PromptTokenCount, usage.ThoughtsTokenCount, usage.ToolUsePromptTokenCount, usage.CandidatesTokenCount, usage.TotalTokenCount, usage.CachedContentTokenCount, dt.Seconds())
+		debugPrint(r)
+		if len(r.Candidates) == 0 || r.Candidates[0].Content == nil || len(r.Candidates[0].Content.Parts) == 0 {
+			log.Print("no candidate responses\n")
+			continue
+		}
+		cand := r.Candidates[0]
+		script = append(script, cand.Content)
+		responded := false
+		for _, p := range cand.Content.Parts {
+			if code := p.ExecutableCode; code != nil {
+				fmt.Printf("# %s\n%s\n", strings.ToLower(string(code.Language)), code.Code)
+			}
+			if code := p.CodeExecutionResult; code != nil {
+				fmt.Printf("%s\n%s\n", code.Outcome, code.Output)
+			}
+			if fn := p.FunctionCall; fn != nil {
+				var args rot13Args
+				if err := schema.Unmarshal(fn.Args, &args, "args"); err != nil {
+					panic(err)
+				}
+				reply, err := rot13(ctx, &args)
+				if err != nil {
+					panic(err)
+				}
+				js, err := schema.Marshal(reply, "reply")
+				if err != nil {
+					panic(err)
+				}
+				resp := &genai.Content{
+					Role: "user",
+					Parts: []*genai.Part{
+						{
+							FunctionResponse: &genai.FunctionResponse{
+								ID:       fn.ID,
+								Name:     fn.Name,
+								Response: map[string]any{"output": js},
+							},
+						},
+					},
+				}
+				debugPrint(resp)
+				script = append(script, resp)
+				responded = true
+			}
+			if p.Text != "" {
+				if p.Thought {
+					fmt.Printf("<THINK>\n%s</THINK>\n", p.Text)
+					continue
+				}
+				fmt.Printf("%s\n", p.Text)
+			}
+		}
+		fmt.Fprintf(os.Stderr, "\n")
+		if responded {
+			goto Resend
+		}
 	}
-	if seen == 0 {
-		log.Fatalf("did not find part to print in:\n%s", data)
+}
+
+func ptr[T any](x T) *T { return &x }
+
+func debugPrint(x any) {
+	response, err := json.MarshalIndent(x, "", "  ")
+	if err != nil {
+		log.Fatal(err)
 	}
+	fmt.Fprintf(os.Stderr, "%s\n", response)
 }
 
-type Response struct {
-	Candidates []Candidate
+type rot13Args struct {
+	Text string `tool:"text to be translated"`
 }
 
-type Candidate struct {
-	Content       Content
-	SafetyRatings []SafetyRating
-}
-type Content struct {
-	Parts []Part
-	Role  string
+type rot13Reply struct {
+	Grkg string `tool:"rot13 of input text"`
 }
 
-type Part struct {
-	Text string
+func rot13(ctx context.Context, in *rot13Args) (*rot13Reply, error) {
+	out := []byte(in.Text)
+	for i, b := range out {
+		if 'A' <= b && b <= 'M' || 'a' <= b && b <= 'm' {
+			out[i] = b + 13
+		} else if 'N' <= b && b <= 'Z' || 'n' <= b && b <= 'z' {
+			out[i] = b - 13
+		}
+	}
+	return &rot13Reply{Grkg: string(out)}, nil
 }
 
-type SafetyRating struct {
-	Category    string
-	Probability string
+func mustType[T any]() *genai.Schema {
+	t, err := schema.Type(reflect.TypeFor[T]())
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+
+var rot13Tool = &genai.Tool{
+	FunctionDeclarations: []*genai.FunctionDeclaration{{
+		Name:        "rot13",
+		Description: "applies rot13 encoding to text",
+		Parameters:  mustType[*rot13Args](),
+		Response:    mustType[*rot13Reply](),
+	}},
 }
