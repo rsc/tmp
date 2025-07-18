@@ -13,7 +13,7 @@
 //
 // The -o flag specifies the name of a file to write instead of using standard output.
 //
-// Example
+// # Example
 //
 // To print a YAML file as JSON:
 //
@@ -22,7 +22,6 @@
 // To convert one:
 //
 //	yaml2json -o data.json data.yaml
-//
 package main
 
 import (
@@ -30,7 +29,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 
@@ -86,7 +85,7 @@ func main() {
 }
 
 func convert(f *os.File) {
-	data, err := ioutil.ReadAll(f)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		log.Print("%s: reading: %v", f.Name(), err)
 		exit = 1

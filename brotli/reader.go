@@ -32,7 +32,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"io/ioutil"
 )
 
 type decodeError C.BrotliDecoderErrorCode
@@ -160,5 +159,5 @@ func Decode(encodedData []byte) ([]byte, error) {
 		in:    encodedData,
 	}
 	defer r.Close()
-	return ioutil.ReadAll(r)
+	return io.ReadAll(r)
 }

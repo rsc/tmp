@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -76,7 +75,7 @@ func balanceN(buf *bytes.Buffer, n int, s string) {
 }
 
 func runProg(cmd []string, prog string) string {
-	err := ioutil.WriteFile("/tmp/bigprog_tmp_.go", []byte(prog), 0666)
+	err := os.WriteFile("/tmp/bigprog_tmp_.go", []byte(prog), 0666)
 	if err != nil {
 		log.Fatal(err)
 	}

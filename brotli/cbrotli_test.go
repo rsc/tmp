@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"testing"
@@ -205,7 +204,7 @@ func TestDecoderStreaming(t *testing.T) {
 		if err := reader.Close(); err != nil {
 			t.Errorf("reader.Close: %v", err)
 		}
-		go ioutil.ReadAll(pr) // swallow the "EOF" token from writer.Close
+		go io.ReadAll(pr) // swallow the "EOF" token from writer.Close
 		if err := writer.Close(); err != nil {
 			t.Errorf("writer.Close: %v", err)
 		}
