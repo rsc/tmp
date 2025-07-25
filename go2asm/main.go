@@ -12,7 +12,7 @@
 // converting it to equivalent assembler input. If the -s option is present,
 // go2asm only converts symbols with names matching the regular expression.
 //
-// Example
+// # Example
 //
 // Extract the assembly for a test program:
 //
@@ -74,19 +74,18 @@
 //		JMP        pc43
 //	$
 //
-// Bugs
+// # Bugs
 //
 // Go2asm only handles amd64 assembler.
 //
 // Data symbols are not implemented.
-//
 package main
 
 import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math"
 	"os"
@@ -137,11 +136,11 @@ func main() {
 	var data []byte
 	var err error
 	if flag.NArg() == 0 {
-		data, err = ioutil.ReadAll(os.Stdin)
+		data, err = io.ReadAll(os.Stdin)
 		input = "<stdin>"
 	} else {
 		input = flag.Arg(0)
-		data, err = ioutil.ReadFile(flag.Arg(0))
+		data, err = os.ReadFile(flag.Arg(0))
 	}
 	if err != nil {
 		log.Fatal(err)

@@ -7,7 +7,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"time"
@@ -23,7 +22,7 @@ func check(err error) {
 }
 
 func main() {
-	d, err := ioutil.TempDir(*dir, "bigdirbench-")
+	d, err := os.MkdirTemp(*dir, "bigdirbench-")
 	check(err)
 	fmt.Printf("working in %s\n", d)
 	wd, err := os.Getwd()
