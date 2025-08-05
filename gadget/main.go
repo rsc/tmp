@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Gemini is an interactive client for [Google's Gemini API].
+// Gadget is an interactive client for [Google's Gemini API].
 //
 // Usage:
 //
-//	gemini [-l] [-k keyfile] [prompt...]
+//	gadget [-l] [-k keyfile] [prompt...]
 //
-// Gemini concatenates its arguments, sends the result as a prompt
+// Gadget concatenates its arguments, sends the result as a prompt
 // to the Gemini Pro model, and prints the response.
 //
 // With no arguments, gemini reads standard input until EOF
@@ -39,7 +39,7 @@ import (
 	"time"
 
 	"google.golang.org/genai"
-	"rsc.io/tmp/gemini/internal/schema"
+	"rsc.io/tmp/gadget/internal/schema"
 )
 
 var (
@@ -65,13 +65,13 @@ var (
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: gemini [options] [prompt]\n")
+	fmt.Fprintf(os.Stderr, "usage: gadget [options] [prompt]\n")
 	os.Exit(2)
 }
 
 func main() {
 	log.SetFlags(0)
-	log.SetPrefix("gemini: ")
+	log.SetPrefix("gadget: ")
 	flag.Usage = usage
 	flag.Parse()
 

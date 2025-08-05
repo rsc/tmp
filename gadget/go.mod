@@ -1,4 +1,4 @@
-module rsc.io/tmp/gemini
+module rsc.io/tmp/gadget
 
 go 1.23
 
