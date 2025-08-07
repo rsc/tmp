@@ -5,9 +5,13 @@
 package mpt
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"runtime"
 
 	"rsc.io/tmp/mpt/internal/slicemath"
@@ -102,42 +106,228 @@ const (
 	// patch size
 	patchMax   = 64 << 20
 	patchFlush = patchMax - 1024 // actual is 7+255+32 but 1024 is less error-prone
+
+	treeMax = 16 << 40
 )
 
 // A diskTree is an on-disk [Tree].
 type diskTree struct {
-	id    [16]byte
-	seq   uint64
-	span  *span.Span
-	mem   []byte
-	patch []byte // pending patch
-	err   error
+	file1   *os.File
+	file2   *os.File
+	id      [16]byte
+	current diskFile
+	next    diskFile
+	span    *span.Span
+	mem     []byte
+	patch   []byte // pending patch
+	err     error
 }
 
-// A diskSeg is a single segment of the on-disk tree.
-type diskSeg struct {
-	mem  []byte
-	base addr // disk address of mem[0]
+type diskFile struct {
+	file *os.File
+	seq  uint64
+	off  int64
 }
 
-// NewDiskTree returns a new on-disk [Tree].
-func NewDiskTree() Tree {
+// Create creates a new, empty on-disk [Tree] stored in the two named files.
+// At any moment, one file or the other contains the entire tree,
+// but the implementation flips between the two files to implement
+// reliable updates.
+//
+// The files must not already exist, unless they are both os.DevNull,
+// in which case the Tree is held only in memory.
+func Create(file1, file2 string) (Tree, error) {
+	mode := os.O_WRONLY | os.O_CREATE | os.O_EXCL
+	if file1 == os.DevNull && file2 == os.DevNull {
+		mode &^= os.O_EXCL
+	}
+	return open(file1, file2, mode, "create")
+}
+
+// Open opens an on-disk [Tree] stored in the two named files.
+// At any moment, one file or the other contains the entire tree,
+// but the implementation flips between the two files to implement
+// reliable updates.
+//
+// The files must have been created by a previous call to [Create].
+func Open(file1, file2 string) (Tree, error) {
+	return open(file1, file2, os.O_RDWR, "open")
+}
+
+func open(file1, file2 string, mode int, op string) (Tree, error) {
+	f1, err := os.OpenFile(file1, mode, 0666)
+	if err != nil {
+		return nil, err
+	}
+	f2, err := os.OpenFile(file2, mode, 0666)
+	if err != nil {
+		f1.Close()
+		return nil, err
+	}
+
 	sp, err := span.Reserve(1 << 44)
 	if err != nil {
-		panic("span: " + err.Error()) // TODO
+		return nil, err
 	}
-	mem, err := sp.Expand(hdrSize)
-	if err != nil {
-		panic("span") // TODO
-	}
-	t := &diskTree{
-		span: sp,
-		mem:  mem,
-	}
-	t.hdr().setHash(t, emptyTreeHash())
-
+	t := &diskTree{span: sp}
 	runtime.AddCleanup(t, func(*struct{}) { sp.Release() }, nil)
-	return t
+
+	if op == "create" {
+		mem, err := sp.Expand(hdrSize)
+		if err != nil {
+			return nil, err
+		}
+		t.mem = mem
+		*(*Hash)(mem[hdrHash:]) = emptyTreeHash()
+		rand.Read(t.id[:])
+		t.current = diskFile{file: f1}
+		t.next = diskFile{file: f2}
+		if err := t.writeTree(&t.current); err != nil {
+			return nil, err
+		}
+		if err := t.writeTree(&t.next); err != nil {
+			return nil, err
+		}
+		return t, nil
+	}
+
+	id1, seq1, n1, err := readFrameInfo(t.file1)
+	if err != nil {
+		return nil, err
+	}
+	id2, seq2, n2, err := readFrameInfo(t.file2)
+	if err != nil {
+		return nil, err
+	}
+	if id1 != id2 {
+		return nil, fmt.Errorf("inconsistent tree files: id %x != %x", id1[:], id2[:])
+	}
+	t.id = id1
+	if seq1 != 0 && seq1 == seq2 {
+		return nil, fmt.Errorf("inconsistent tree files: both seq %d", seq1)
+	}
+
+	t.current = diskFile{file: f1, seq: seq1}
+	t.next = diskFile{file: f2, seq: seq2}
+	if t.current.seq < t.next.seq {
+		t.current, n1, t.next, n2 = t.next, n2, t.current, n1
+	}
+	if err := t.readTree(&t.current, n1); err != nil {
+		t.current, n1, t.next, n2 = t.next, n2, t.current, n1
+		if err := t.readTree(&t.current, n1); err != nil {
+			return t, err
+		}
+	}
+
+	// TODO maybe start a compaction
+
+	return t, nil
+}
+
+func (t *diskTree) readTree(f *diskFile, treeLen int) error {
+	mem, err := t.span.Expand(treeLen)
+	if err != nil {
+		return err
+	}
+	if n, err := t.readFrame(f, mem); err != nil {
+		return err
+	} else if n != treeLen {
+		return errCorrupt
+	}
+	t.mem = mem
+
+	// TODO read patches
+
+	return nil
+}
+
+func readFrameInfo(f *os.File) (id [16]byte, seq uint64, len int, err error) {
+	var buf [frameSize]byte
+	if _, err = f.ReadAt(buf[:], 0); err != nil {
+		return
+	}
+	copy(id[:], buf[frameID:])
+	seq = binary.BigEndian.Uint64(buf[frameSeq:])
+	n := binary.BigEndian.Uint64(buf[frameLen:])
+	if uint64(int(n)) != n || int(n) < 0 || n > treeMax {
+		err = fmt.Errorf("invalid length %#x", n)
+	}
+	return
+}
+
+var errCorrupt = errors.New("corrupt data")
+
+func (t *diskTree) readFrame(f *diskFile, data []byte) (int, error) {
+	var frame [frameSize]byte
+	if _, err := f.file.ReadAt(frame[:], f.off); err != nil {
+		return 0, err
+	}
+	if [16]byte(frame[frameID:]) != t.id {
+		return 0, errCorrupt
+	}
+	if binary.BigEndian.Uint64(frame[frameSeq:]) != f.seq {
+		return 0, errCorrupt
+	}
+	n := binary.BigEndian.Uint64(frame[frameLen:])
+	if n > uint64(len(data)) {
+		return 0, errCorrupt
+	}
+
+	if _, err := f.file.ReadAt(data[:n], f.off+frameSize); err != nil {
+		if err == io.ErrUnexpectedEOF {
+			return 0, errCorrupt
+		}
+		return 0, err
+	}
+
+	var fsum [32]byte
+	if _, err := f.file.ReadAt(fsum[:], f.off+frameSize+int64(n)); err != nil {
+		if err == io.ErrUnexpectedEOF {
+			return 0, errCorrupt
+		}
+		return 0, err
+	}
+	sum := sha2(frame[:], data)
+	if sum != fsum {
+		return 0, errCorrupt
+	}
+	f.off += frameSize + int64(n) + 32
+
+	return int(n), nil
+}
+
+func (t *diskTree) writeTree(f *diskFile) error {
+	return t.writeFrame(f, t.mem)
+}
+
+func (t *diskTree) writeFrame(f *diskFile, data []byte) error {
+	var frame [frameSize]byte
+	copy(frame[frameID:], t.id[:])
+	binary.BigEndian.PutUint64(frame[frameSeq:], f.seq)
+	binary.BigEndian.PutUint64(frame[frameLen:], uint64(len(data)))
+	sum := sha2(frame[:], data)
+
+	if _, err := f.file.WriteAt(frame[:], f.off); err != nil {
+		panic(err)
+		return err
+	}
+	if _, err := f.file.WriteAt(data, f.off+frameSize); err != nil {
+		panic(err)
+		return err
+	}
+	if _, err := f.file.WriteAt(sum[:], f.off+frameSize+int64(len(data))); err != nil {
+		panic(err)
+		return err
+	}
+	f.off += frameSize + int64(len(data)) + 32
+	return nil
+}
+
+func sha2(x, y []byte) [32]byte {
+	h := sha256.New()
+	h.Write(x)
+	h.Write(y)
+	return [32]byte(h.Sum(nil))
 }
 
 func (t *diskTree) Close() error {
@@ -151,23 +341,21 @@ func (t *diskTree) Close() error {
 }
 
 func (t *diskTree) startPatch() {
-	t.patch = make([]byte, frameSize, patchMax)
-	copy(t.patch[frameID:], t.id[:])
-	binary.BigEndian.PutUint64(t.patch[frameSeq:], t.seq)
+	t.patch = make([]byte, patchMax)
 }
 
-func (t *diskTree) flushPatch() {
-	binary.BigEndian.PutUint64(t.patch[frameLen:], uint64(len(t.patch)-frameSize))
-	sum := sha256.Sum256(t.patch)
-	t.patch = append(t.patch, sum[:]...)
-	// TODO write patch somewhere
-	t.patch = t.patch[:frameSize]
+func (t *diskTree) flushPatch() error {
+	if err := t.writeFrame(&t.current, t.patch); err != nil {
+		return err
+	}
+	t.patch = t.patch[:0]
+	return nil
 }
 
-func (t *diskTree) mutate(dst, src []byte) {
+func (t *diskTree) mutate(dst, src []byte) error {
 	n := copy(dst, src)
 	if n > 255 {
-		panic("mutation too large")
+		return fmt.Errorf("mutation too large")
 	}
 	if t.patch == nil {
 		t.startPatch()
@@ -177,16 +365,21 @@ func (t *diskTree) mutate(dst, src []byte) {
 	buf[6] = byte(n)
 	t.patch = append(t.patch, buf[:]...)
 	t.patch = append(t.patch, dst[:n]...)
-	if len(t.patch) > patchFlush {
-		t.flushPatch()
+	if len(t.patch) < patchFlush {
+		return nil
 	}
+	if err := t.flushPatch(); err != nil {
+		return err
+	}
+	// TODO maybe start a compaction
+	return nil
 }
 
-func (t *diskTree) addrToMem(a addr, n int) []byte {
+func (t *diskTree) addrToMem(a addr, n int) ([]byte, error) {
 	if a > addr(len(t.mem)) || len(t.mem)-int(a) < n {
-		panic("invalid address") // TODO might be corruption
+		return nil, errCorrupt
 	}
-	return t.mem[a : a+addr(n)]
+	return t.mem[a : a+addr(n)], nil
 }
 
 func (t *diskTree) memToAddr(p []byte) addr {
@@ -236,39 +429,43 @@ func (h *diskHdr) root() addr   { return parseAddr(h[hdrRoot:]) }
 func (h *diskHdr) hash() Hash   { return Hash(h[hdrHash:]) }
 func (h *diskHdr) nodes() int   { return int(binary.BigEndian.Uint64(h[hdrNodes:])) }
 
-func (h *diskHdr) setEpoch(t *diskTree, epoch int64) {
+func (h *diskHdr) setEpoch(t *diskTree, epoch int64) error {
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], uint64(epoch))
-	t.mutate(h[hdrEpoch:], buf[:])
+	return t.mutate(h[hdrEpoch:], buf[:])
 }
 
-func (h *diskHdr) setDirty(t *diskTree, d bool) {
+func (h *diskHdr) setDirty(t *diskTree, d bool) error {
 	var buf [1]byte
 	if d {
 		buf[0] = 1
 	}
-	t.mutate(h[hdrDirty:], buf[:])
+	return t.mutate(h[hdrDirty:], buf[:])
 }
 
-func (h *diskHdr) setRoot(t *diskTree, n *diskNode) {
+func (h *diskHdr) setRoot(t *diskTree, n *diskNode) error {
 	a := t.addr(n)
 	var buf [6]byte
 	putAddr(buf[:], a)
-	t.mutate(h[hdrRoot:], buf[:])
+	return t.mutate(h[hdrRoot:], buf[:])
 }
 
-func (h *diskHdr) setHash(t *diskTree, hash Hash) {
-	t.mutate(h[hdrHash:], hash[:])
+func (h *diskHdr) setHash(t *diskTree, hash Hash) error {
+	return t.mutate(h[hdrHash:], hash[:])
 }
 
-func (h *diskHdr) setNodes(t *diskTree, n int) {
+func (h *diskHdr) setNodes(t *diskTree, n int) error {
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], uint64(n))
-	t.mutate(h[hdrNodes:], buf[:])
+	return t.mutate(h[hdrNodes:], buf[:])
 }
 
 func (t *diskTree) hdr() *diskHdr {
-	return (*diskHdr)(t.addrToMem(0, hdrSize))
+	mem, err := t.addrToMem(0, hdrSize)
+	if err != nil {
+		panic(err) // mem should always be big enough for the header
+	}
+	return (*diskHdr)(mem)
 }
 
 // A diskNode is the memory copy of a node.
@@ -276,11 +473,15 @@ func (t *diskTree) hdr() *diskHdr {
 // are pointers into the in-memory copy t.mem.
 type diskNode [nodeSize]byte
 
-func (t *diskTree) node(a addr) *diskNode {
+func (t *diskTree) node(a addr) (*diskNode, error) {
 	if a == 0 {
-		return nil
+		return nil, nil
 	}
-	return (*diskNode)(t.addrToMem(a, nodeSize))
+	mem, err := t.addrToMem(a, nodeSize)
+	if err != nil {
+		return nil, err
+	}
+	return (*diskNode)(mem), nil
 }
 
 func (t *diskTree) addr(n *diskNode) addr {
@@ -291,15 +492,25 @@ func (t *diskTree) addr(n *diskNode) addr {
 }
 
 // addrAt reads a node address from the address a.
+// The caller must ensure that a is a valid address,
+// or else addrAt panics.
 func (t *diskTree) addrAt(a addr) addr {
-	return parseAddr(t.addrToMem(a, addrSize))
+	mem, err := t.addrToMem(a, addrSize)
+	if err != nil {
+		panic(err)
+	}
+	return parseAddr(mem)
 }
 
 // setAddrAt writes the node address b to the address a.
-func (t *diskTree) setAddrAt(a, b addr) {
+func (t *diskTree) setAddrAt(a, b addr) error {
+	mem, err := t.addrToMem(a, addrSize)
+	if err != nil {
+		return err
+	}
 	var buf [addrSize]byte
 	putAddr(buf[:], b)
-	t.mutate(t.addrToMem(a, addrSize), buf[:])
+	return t.mutate(mem, buf[:])
 }
 
 func (t *diskTree) newNode() (*diskNode, error) {
@@ -324,7 +535,7 @@ func (n *diskNode) bit() int {
 	return int(n[nodeUbit])
 }
 
-func (n *diskNode) init(t *diskTree, key Key, val Value, bit int, left, right *diskNode) {
+func (n *diskNode) init(t *diskTree, key Key, val Value, bit int, left, right *diskNode) error {
 	var buf [nodeSize]byte
 	copy(buf[nodeKey:], key[:])
 	copy(buf[nodeVal:], val[:])
@@ -332,17 +543,17 @@ func (n *diskNode) init(t *diskTree, key Key, val Value, bit int, left, right *d
 	buf[nodeDirty] = 1
 	putAddr(buf[nodeLeft:], t.addr(left))
 	putAddr(buf[nodeRight:], t.addr(right))
-	t.mutate(n[:], buf[:])
+	return t.mutate(n[:], buf[:])
 }
 
-func (n *diskNode) setVal(t *diskTree, val Value) { t.mutate(n[nodeVal:], val[:]) }
-func (n *diskNode) setIHash(t *diskTree, h Hash)  { t.mutate(n[nodeIHash:], h[:]) }
-func (n *diskNode) setDirty(t *diskTree, d bool) {
+func (n *diskNode) setVal(t *diskTree, val Value) error { return t.mutate(n[nodeVal:], val[:]) }
+func (n *diskNode) setIHash(t *diskTree, h Hash) error  { return t.mutate(n[nodeIHash:], h[:]) }
+func (n *diskNode) setDirty(t *diskTree, d bool) error {
 	var p [1]byte
 	if d {
 		p[0] = 1
 	}
-	t.mutate(n[nodeDirty:], p[:])
+	return t.mutate(n[nodeDirty:], p[:])
 }
 
 // hash returns the hash for the given tree node.
@@ -355,42 +566,82 @@ func (n *diskNode) hash(pbit int) Hash {
 }
 
 // unhash marks n's hash invalid.
-func (n *diskNode) unhash(t *diskTree) {
-	if !n.dirty() {
-		n.setDirty(t, true)
+func (n *diskNode) unhash(t *diskTree) error {
+	if n.dirty() {
+		return nil
 	}
+	return n.setDirty(t, true)
 }
 
 // rehash updates n.hash if needed and then returns it.
-func (n *diskNode) rehash(t *diskTree, pbit int) Hash {
+func (n *diskNode) rehash(t *diskTree, pbit int) (Hash, error) {
 	nbit := n.bit()
 	if nbit <= pbit {
-		return hashLeaf(n.key(), n.val())
+		return hashLeaf(n.key(), n.val()), nil
 	}
 	if n.dirty() {
-		n.setIHash(t,
-			hashInner(nbit,
-				t.node(n.left()).rehash(t, nbit),
-				t.node(n.right()).rehash(t, nbit)))
-		n.setDirty(t, false)
+		left, err := t.node(n.left())
+		if err != nil {
+			return Hash{}, err
+		}
+		lhash, err := left.rehash(t, nbit)
+		if err != nil {
+			return Hash{}, err
+		}
+		right, err := t.node(n.right())
+		if err != nil {
+			return Hash{}, err
+		}
+		rhash, err := right.rehash(t, nbit)
+		if err != nil {
+			return Hash{}, err
+		}
+		if err := n.setIHash(t, hashInner(nbit, lhash, rhash)); err != nil {
+			return Hash{}, err
+		}
+		if err := n.setDirty(t, false); err != nil {
+			return Hash{}, err
+		}
 	}
-	return n.ihash()
+	return n.ihash(), nil
 }
 
 // Snap returns a snapshot of t.
 func (t *diskTree) Snap() (Snapshot, error) {
-	if t.err != nil {
-		return Snapshot{}, t.err
+	if err := t.snap(); err != nil {
+		t.err = err
+		return Snapshot{}, err
 	}
-	if t.hdr().dirty() {
-		t.hdr().setEpoch(t, t.hdr().epoch()+1)
-		t.hdr().setDirty(t, false)
-
-		root := t.node(t.hdr().root())
-		t.hdr().setHash(t, root.rehash(t, -1))
-		// t.check()
-	}
+	// t.check()
 	return Snapshot{t.hdr().epoch(), t.hdr().hash()}, nil
+}
+
+func (t *diskTree) snap() error {
+	if t.err != nil {
+		return t.err
+	}
+	if !t.hdr().dirty() {
+		return nil
+	}
+
+	if err := t.hdr().setEpoch(t, t.hdr().epoch()+1); err != nil {
+		return err
+	}
+	if err := t.hdr().setDirty(t, false); err != nil {
+		return err
+	}
+	root, err := t.node(t.hdr().root())
+	if err != nil {
+		return err
+	}
+	hash, err := root.rehash(t, -1)
+	if err != nil {
+		return err
+	}
+	if err := t.hdr().setHash(t, hash); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Set sets the value associated with key to val.
@@ -399,7 +650,9 @@ func (t *diskTree) Set(key Key, val Value) error {
 		return t.err
 	}
 	if !t.hdr().dirty() {
-		t.hdr().setDirty(t, true)
+		if err := t.hdr().setDirty(t, true); err != nil {
+			return err
+		}
 	}
 	if t.hdr().root() == 0 {
 		n, err := t.newNode()
@@ -407,7 +660,9 @@ func (t *diskTree) Set(key Key, val Value) error {
 			return err
 		}
 		n.init(t, key, val, 0, nil, nil)
-		t.hdr().setRoot(t, n)
+		if err := t.hdr().setRoot(t, n); err != nil {
+			return err
+		}
 	} else {
 		b, err := t.setChild(-1, hdrRoot, key, val)
 		if err != nil {
@@ -416,7 +671,13 @@ func (t *diskTree) Set(key Key, val Value) error {
 		if b >= 0 {
 			panic("bad add")
 		}
-		t.node(t.hdr().root()).unhash(t)
+		root, err := t.node(t.hdr().root())
+		if err != nil {
+			return err
+		}
+		if err := root.unhash(t); err != nil {
+			return err
+		}
 	}
 	// t.check()
 	return nil
@@ -428,7 +689,9 @@ func (n *diskNode) set(t *diskTree, pbit int, key Key, val Value) (int, error) {
 		// view n as leaf
 		b := n.key().overlap(key)
 		if b == keyBits {
-			n.setVal(t, val)
+			if err := n.setVal(t, val); err != nil {
+				return 0, err
+			}
 			return -1, nil
 		}
 		// Caller must create a node splitting at bit b.
@@ -444,13 +707,18 @@ func (n *diskNode) set(t *diskTree, pbit int, key Key, val Value) (int, error) {
 		return 0, err
 	}
 	if b < 0 {
-		n.unhash(t)
+		if err := n.unhash(t); err != nil {
+			return 0, err
+		}
 	}
 	return b, nil
 }
 
 func (t *diskTree) setChild(nbit int, childp addr, key Key, val Value) (int, error) {
-	child := t.node(t.addrAt(childp))
+	child, err := t.node(t.addrAt(childp))
+	if err != nil {
+		return 0, err
+	}
 	b, err := child.set(t, nbit, key, val)
 	if err != nil {
 		return 0, err
@@ -467,7 +735,9 @@ func (t *diskTree) setChild(nbit int, childp addr, key Key, val Value) (int, err
 			left, right = child, n
 		}
 		n.init(t, key, val, b, left, right)
-		t.setAddrAt(childp, t.addr(n))
+		if err := t.setAddrAt(childp, t.addr(n)); err != nil {
+			return 0, err
+		}
 		b = -1
 	}
 	return b, nil
@@ -481,14 +751,17 @@ func (t *diskTree) Prove(key Key) (Proof, error) {
 	if t.hdr().dirty() {
 		return nil, ErrModifiedTree
 	}
-	root := t.node(t.hdr().root())
+	root, err := t.node(t.hdr().root())
+	if err != nil {
+		return nil, err
+	}
 	if root == nil {
 		return Proof(proofEmpty), nil
 	}
-	return root.prove(t, -1, key), nil
+	return root.prove(t, -1, key)
 }
 
-func (n *diskNode) prove(t *diskTree, pbit int, key Key) Proof {
+func (n *diskNode) prove(t *diskTree, pbit int, key Key) (Proof, error) {
 	nbit := n.bit()
 	if nbit <= pbit {
 		// view n as leaf
@@ -500,28 +773,41 @@ func (n *diskNode) prove(t *diskTree, pbit int, key Key) Proof {
 			p = append(Proof(proofDeny), nkey[:]...)
 		}
 		nval := n.val()
-		return append(p, nval[:]...)
+		return append(p, nval[:]...), nil
 	}
 
-	var sib Hash
-	var child *diskNode
-	if key.bit(nbit) == 0 {
-		child = t.node(n.left())
-		sib = t.node(n.right()).hash(nbit)
-	} else {
-		child = t.node(n.right())
-		sib = t.node(n.left()).hash(nbit)
+	childAddr, sibAddr := n.left(), n.right()
+	if key.bit(nbit) == 1 {
+		childAddr, sibAddr = sibAddr, childAddr
 	}
-	return append(append(child.prove(t, nbit, key), byte(nbit)), sib[:]...)
+	child, err := t.node(childAddr)
+	if err != nil {
+		return nil, err
+	}
+	sib, err := t.node(sibAddr)
+	if err != nil {
+		return nil, err
+	}
+	sibHash := sib.hash(nbit)
+
+	p, err := child.prove(t, nbit, key)
+	if err != nil {
+		return nil, err
+	}
+	return append(append(p, byte(nbit)), sibHash[:]...), nil
 }
 
 func (t *diskTree) check() {
 	println("check")
-	if t.node(t.hdr().root()) == nil {
+	root, err := t.node(t.hdr().root())
+	if err != nil {
+		panic(err)
+	}
+	if root == nil {
 		return
 	}
 	var sawNil bool
-	h := t.node(t.hdr().root()).check(t, 1, -1, &sawNil)
+	h := root.check(t, 1, -1, &sawNil)
 	if h != t.hdr().hash() && !t.hdr().dirty() {
 		fmt.Printf("have %v want %v\n", t.hdr().hash(), h)
 		panic("bad hash")
@@ -545,9 +831,18 @@ func (n *diskNode) check(t *diskTree, depth, pbit int, sawNil *bool) Hash {
 		return hashLeaf(n.key(), n.val())
 	}
 	fmt.Printf("%*s%d %#x %#x %#x %v dirty=%v\n", depth*2, "", n.bit(), t.addr(n), n.left(), n.right(), n.ihash(), n.dirty())
+
+	left, err := t.node(n.left())
+	if err != nil {
+		panic(err)
+	}
+	right, err := t.node(n.right())
+	if err != nil {
+		panic(err)
+	}
 	h := hashInner(n.bit(),
-		t.node(n.left()).check(t, depth+1, n.bit(), sawNil),
-		t.node(n.right()).check(t, depth+1, n.bit(), sawNil))
+		left.check(t, depth+1, n.bit(), sawNil),
+		right.check(t, depth+1, n.bit(), sawNil))
 	if h != n.ihash() && !n.dirty() {
 		fmt.Printf("%*shave %v want %v\n", depth*2, "", n.ihash(), h)
 		panic("bad hash")
