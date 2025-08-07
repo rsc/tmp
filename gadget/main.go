@@ -26,11 +26,14 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"math/big"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -39,14 +42,15 @@ import (
 	"time"
 
 	"google.golang.org/genai"
+	"rsc.io/tmp/gadget/internal/envfile"
 	"rsc.io/tmp/gadget/internal/schema"
 )
 
 var (
 	home, _ = os.UserHomeDir()
-	key     string
-	keyFile = flag.String("k", filepath.Join(home, ".geminikey"), "read gemini API key from `file`")
 	model   = flag.String("m", "gemini-2.5-flash", "use gemini `model`")
+
+	flagEnv = flag.String("env", filepath.Join(home, ".env"), "read env settings from `file`")
 
 	flagCode        = flag.Bool("code", false, "enable code execution tool (on Gemini servers)")
 	flagComputer    = flag.Bool("computer", false, "enable computer use tool")
@@ -75,13 +79,20 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	ctx := context.Background()
-	data, err := os.ReadFile(*keyFile)
-	if err != nil {
-		log.Fatal(err)
+	var env map[string]string
+	var err error
+	if *flagEnv != "" {
+		env, err = envfile.Load(*flagEnv)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-	key = strings.TrimSpace(string(data))
+	key := cmp.Or(os.Getenv("GEMINI_API_KEY"), env["GEMINI_API_KEY"])
+	if key == "" {
+		log.Fatalf("missing $GEMINI_API_KEY; set in environment or $HOME/.env")
+	}
 
+	ctx := context.Background()
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  key,
 		Backend: genai.BackendGeminiAPI,
@@ -89,6 +100,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	lf := logFile()
 
 	config := &genai.GenerateContentConfig{
 		CandidateCount: 1,
@@ -176,7 +189,7 @@ func main() {
 		config.Tools = append(config.Tools, rot13Tool)
 	}
 
-	debugPrint(config)
+	logJSON(lf, "config", config)
 
 	first := true
 	var script []*genai.Content
@@ -197,10 +210,12 @@ func main() {
 					log.Fatal(err)
 				}
 				typ := http.DetectContentType(data)
+				typ = "text/plain"
 				content.Parts = append(content.Parts, &genai.Part{InlineData: &genai.Blob{Data: data, MIMEType: typ}})
 			}
 		}
 		content.Parts = append(content.Parts, &genai.Part{Text: line})
+		logJSON(lf, "script", content)
 		script = append(script, content)
 	Resend:
 		start := time.Now()
@@ -209,6 +224,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		logJSON(lf, "response", r)
 		dt := time.Since(start)
 		usage := r.UsageMetadata
 		fmt.Fprintf(os.Stderr, "# %din+%dthink+%dtool+%dout=%d tokens (%d cached), %.1fs\n", usage.PromptTokenCount, usage.ThoughtsTokenCount, usage.ToolUsePromptTokenCount, usage.CandidatesTokenCount, usage.TotalTokenCount, usage.CachedContentTokenCount, dt.Seconds())
@@ -218,6 +234,7 @@ func main() {
 			continue
 		}
 		cand := r.Candidates[0]
+		logJSON(lf, "script", cand.Content)
 		script = append(script, cand.Content)
 		responded := false
 		for _, p := range cand.Content.Parts {
@@ -253,6 +270,7 @@ func main() {
 					},
 				}
 				debugPrint(resp)
+				logJSON(lf, "script", resp)
 				script = append(script, resp)
 				responded = true
 			}
@@ -316,4 +334,41 @@ var rot13Tool = &genai.Tool{
 		Parameters:  mustType[*rot13Args](),
 		Response:    mustType[*rot13Reply](),
 	}},
+}
+
+func logFile() *os.File {
+	dir := filepath.Join(home, ".gadget/log")
+	if _, err := os.Stat(dir); err != nil {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			log.Fatal(err)
+		}
+	}
+	file := time.Now().UTC().Format("2006-01-02-150405")
+	id := big.NewInt(int64(rand.Int64())).Text(36)
+	for len(id) < 10 {
+		id = "0" + id
+	}
+	file += "-" + id[:7]
+
+	f, err := os.Create(filepath.Join(dir, file))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return f
+}
+
+func logJSON(f *os.File, verb string, arg any) {
+	line := []byte(verb)
+	if arg != nil {
+		js, err := json.Marshal(arg)
+		if err != nil {
+			log.Fatal(err)
+		}
+		line = append(line, ' ')
+		line = append(line, js...)
+	}
+	line = append(line, '\n')
+	if _, err := f.Write(line); err != nil {
+		log.Fatal(err)
+	}
 }
