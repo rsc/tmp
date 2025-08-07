@@ -4,7 +4,10 @@
 
 package mpt
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // A memTree is an in-memory [Tree].
 type memTree struct {
@@ -67,6 +70,20 @@ func (n *memNode) rehash(pbit int) Hash {
 		n.dirty = false
 	}
 	return n.ihash
+}
+
+// Sync is a no-op since the data is only in memory.
+func (t *memTree) Sync() error {
+	return nil
+}
+
+// Close is a no-op since the data is only in memory.
+func (t *memTree) Close() error {
+	if t.err != nil {
+		return t.err
+	}
+	t.err = errors.New("tree is closed")
+	return nil
 }
 
 // Snap returns a snapshot of t.

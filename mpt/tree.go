@@ -48,6 +48,10 @@ type Tree interface {
 	// concurrently with other calls to Prove, but not other
 	// calls to Set or Snap.
 	Prove(key Key) (Proof, error)
+
+	// TODO explain
+	Sync() error
+	Close() error
 }
 
 // ErrModifiedTree indicates that Prove was called after a Set without a Snap.
