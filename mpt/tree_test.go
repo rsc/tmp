@@ -75,6 +75,7 @@ var missing = []Key{
 
 func testImpls(t *testing.T, run func(*testing.T, func(*testing.T) *testTree)) {
 	t.Run("impl=mem", func(t *testing.T) { run(t, testMemTree) })
+	t.Run("impl=disk", func(t *testing.T) { run(t, testDiskTree) })
 }
 
 func TestGoldenTrees(t *testing.T) {
@@ -210,6 +211,10 @@ func testMemTree(t *testing.T) *testTree {
 	return &testTree{t: t, tree: NewMemTree()}
 }
 
+func testDiskTree(t *testing.T) *testTree {
+	return &testTree{t: t, tree: NewDiskTree()}
+}
+
 func (tt *testTree) set(key Key, val Value) {
 	err := tt.tree.Set(key, val)
 	if err != nil {
@@ -263,14 +268,17 @@ func (tt *testTree) get(key Key, val Value, ok bool) {
 
 func BenchmarkSet1K_100K(b *testing.B) {
 	b.Run("impl=mem", func(b *testing.B) { benchmarkSet(b, NewMemTree(), 1000, 100e3) })
+	b.Run("impl=disk", func(b *testing.B) { benchmarkSet(b, NewDiskTree(), 1000, 100e3) })
 }
 
 func BenchmarkSet1K_1M(b *testing.B) {
 	b.Run("impl=mem", func(b *testing.B) { benchmarkSet(b, NewMemTree(), 1000, 1e6) })
+	b.Run("impl=disk", func(b *testing.B) { benchmarkSet(b, NewDiskTree(), 1000, 1e6) })
 }
 
 func BenchmarkSet1K_10M(b *testing.B) {
 	b.Run("impl=mem", func(b *testing.B) { benchmarkSet(b, NewMemTree(), 1000, 10e6) })
+	b.Run("impl=disk", func(b *testing.B) { benchmarkSet(b, NewDiskTree(), 1000, 10e6) })
 }
 
 func benchmarkSet(b *testing.B, tree Tree, n, treeSize int) {
@@ -296,14 +304,17 @@ func benchmarkSet(b *testing.B, tree Tree, n, treeSize int) {
 
 func BenchmarkProofIn100K(b *testing.B) {
 	b.Run("impl=mem", func(b *testing.B) { benchmarkProof(b, NewMemTree(), 100e3) })
+	b.Run("impl=disk", func(b *testing.B) { benchmarkProof(b, NewDiskTree(), 100e3) })
 }
 
 func BenchmarkProofIn1M(b *testing.B) {
 	b.Run("impl=mem", func(b *testing.B) { benchmarkProof(b, NewMemTree(), 1e6) })
+	b.Run("impl=disk", func(b *testing.B) { benchmarkProof(b, NewDiskTree(), 1e6) })
 }
 
 func BenchmarkProofIn10M(b *testing.B) {
 	b.Run("impl=mem", func(b *testing.B) { benchmarkProof(b, NewMemTree(), 10e6) })
+	b.Run("impl=disk", func(b *testing.B) { benchmarkProof(b, NewDiskTree(), 10e6) })
 }
 
 func benchmarkProof(b *testing.B, tree Tree, treeSize int) {
