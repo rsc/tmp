@@ -30,6 +30,7 @@ function ivyRestartButton() {
 }
 
 function ivyStartup() {
+	ivyConvertPre();
 	if (typeof(Worker) !== "undefined") {
 		ivyStartWorker();
 		ivyWait();
@@ -47,7 +48,6 @@ function ivyWait() {
 			if (ok) {
 				console.log('Ivy ivyConnected.');
 				ivyConnectTextareas(); // TODO delete
-				ivyConvertPre();
 				ivyStartTranscript();
 				console.log('Ready for input.');
 				return;
@@ -200,7 +200,7 @@ function ivyWorkerCode() {
 	run = function() { return [false, "", "ivy not running"]; }
 
 	const go = new Go();
-	WebAssembly.instantiateStreaming(fetch("https://swtch.com/ivy/main.wasm"), go.importObject).then((result) => {
+	WebAssembly.instantiateStreaming(fetch("http://localhost:8080/main.wasm?br"), go.importObject).then((result) => {
 		go.run(result.instance);
 	});
 
