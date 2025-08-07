@@ -87,6 +87,7 @@ func main() {
 			log.Printf("success!\n")
 			break
 		}
+		gerrit("DELETE", "https://code-review.googlesource.com/a/projects/re2/tags/"+tag, nil, nil)
 		i, err := strconv.ParseInt(m[2], 10, 64)
 		if err != nil {
 			log.Fatalf("bad tag time %s in:\n%s", m[2], out)
@@ -96,7 +97,6 @@ func main() {
 		}
 		delta = i - target.Unix()
 		log.Printf("signing delta=%ds", delta)
-		gerrit("DELETE", "https://code-review.googlesource.com/a/projects/re2/tags/"+tag, nil, nil)
 
 		prefix = m[1]
 		suffix = m[3]
