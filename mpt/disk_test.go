@@ -66,9 +66,9 @@ func (f *testFile) WriteAt(data []byte, off int64) (int, error) {
 		return 0, fmt.Errorf("non-appending write\n\n%s", debug.Stack())
 	}
 	if off > int64(len(f.data)) {
-		return 0, fmt.Errorf("write with hole\n\n%s", debug.Stack())
+		// Fill hole in file.
+		f.data = append(f.data, make([]byte, int(off)-len(f.data))...)
 	}
-
 	f.tester.t.Logf("%s write %#x+%#x = %#x", f.name(), off, len(data), off+int64(len(data)))
 	n := copy(f.data[off:], data)
 	f.data = append(f.data, data[n:]...)
