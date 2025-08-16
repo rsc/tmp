@@ -59,7 +59,6 @@ func (n *diskNode) rehash(t *diskTree, pbit int) (Hash, error) {
 // Snap returns a snapshot of t.
 func (t *diskTree) Snap() (Snapshot, error) {
 	if err := t.snap(); err != nil {
-		t.err = err
 		return Snapshot{}, err
 	}
 	// t.check()
