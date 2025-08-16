@@ -66,10 +66,12 @@ var (
 	flagSeed        = flag.Int("seed", -1, "use random seed `N`")
 	flagRot13       = flag.Bool("rot13", false, "enable local rot13 tool")
 	flagAttach      = flag.String("a", "", "attach `file` to request")
+	flagJSON        = flag.Bool("json", false, "print JSON traces of all messages")
 )
 
 func usage() {
 	fmt.Fprintf(os.Stderr, "usage: gadget [options] [prompt]\n")
+	flag.PrintDefaults()
 	os.Exit(2)
 }
 
@@ -191,9 +193,18 @@ func main() {
 
 	logJSON(lf, "config", config)
 
-	first := true
+	var attachments []*genai.Part
+	if *flagAttach != "" {
+		var err error
+		attachments, err = attach(*flagAttach)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	var script []*genai.Content
 	scanner := bufio.NewScanner(os.Stdin)
+Reading:
 	for {
 		fmt.Fprintf(os.Stderr, "> ")
 		if !scanner.Scan() {
@@ -202,19 +213,22 @@ func main() {
 		line := scanner.Text()
 		fmt.Fprintf(os.Stderr, "\n")
 		content := &genai.Content{Role: "user"}
-		if first {
-			first = false
-			if *flagAttach != "" {
-				data, err := os.ReadFile(*flagAttach)
-				if err != nil {
-					log.Fatal(err)
-				}
-				typ := http.DetectContentType(data)
-				typ = "text/plain"
-				content.Parts = append(content.Parts, &genai.Part{InlineData: &genai.Blob{Data: data, MIMEType: typ}})
+		content.Parts = append(content.Parts, attachments...)
+
+		line = strings.TrimSpace(line)
+		for strings.HasPrefix(line, "@") {
+			var file string
+			file, line, _ = strings.Cut(line[1:], " ")
+			parts, err := attach(file)
+			if err != nil {
+				log.Printf("attach @%s: %v; message not sent!", file, err)
+				continue Reading
 			}
+			content.Parts = append(content.Parts, parts...)
 		}
+
 		content.Parts = append(content.Parts, &genai.Part{Text: line})
+		attachments = nil // waited to make sure @ attachments don't discard line
 		logJSON(lf, "script", content)
 		script = append(script, content)
 	Resend:
@@ -289,9 +303,28 @@ func main() {
 	}
 }
 
+func attach(file string) ([]*genai.Part, error) {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	typ := http.DetectContentType(data)
+	if strings.HasPrefix(typ, "text/") {
+		typ, _, _ = strings.Cut(typ, ";")
+	}
+	parts := []*genai.Part{
+		genai.NewPartFromText("Attached file: " + file),
+		&genai.Part{InlineData: &genai.Blob{Data: data, MIMEType: typ}},
+	}
+	return parts, nil
+}
+
 func ptr[T any](x T) *T { return &x }
 
 func debugPrint(x any) {
+	if !*flagJSON {
+		return
+	}
 	response, err := json.MarshalIndent(x, "", "  ")
 	if err != nil {
 		log.Fatal(err)
