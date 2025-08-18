@@ -818,8 +818,8 @@ func (m *Mem) maybeCompact(n int) error {
 
 	// Switch current and next.
 	m.current, m.next = m.next, m.current
-	setCurrent(m.current.file, true)
-	setCurrent(m.next.file, false)
+	setCurrent(m.current.file, true, int(m.current.off))
+	setCurrent(m.next.file, false, int(m.next.off))
 	m.next.seq = 0
 	return nil
 }
@@ -836,9 +836,9 @@ func (m *Mem) writeFrameSeq(w io.WriterAt, off int64, seq uint64) error {
 	return nil
 }
 
-func setCurrent(f File, b bool) {
-	if f, ok := f.(interface{ setCurrent(bool) }); ok {
-		f.setCurrent(b)
+func setCurrent(f File, b bool, off int) {
+	if f, ok := f.(interface{ setCurrent(bool, int) }); ok {
+		f.setCurrent(b, off)
 	}
 }
 

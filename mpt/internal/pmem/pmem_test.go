@@ -119,8 +119,9 @@ type testFile struct {
 	current bool   // whether file is current
 }
 
-func (f *testFile) setCurrent(current bool) {
+func (f *testFile) setCurrent(current bool, off int) {
 	f.current = current
+	f.data = f.data[:off]
 }
 
 func (f *testFile) clone() *testFile {
@@ -150,7 +151,7 @@ func (f *testFile) WriteAt(data []byte, off int64) (int, error) {
 	// Writes to the next file can be scattered, because
 	// we are writing the tree interleaved with new patches.
 	if f.current && off != int64(len(f.data)) {
-		//return 0, fmt.Errorf("non-appending write\n\n%s", debug.Stack())
+		return 0, fmt.Errorf("non-appending write\n\n%s", debug.Stack())
 	}
 	if off > int64(len(f.data)) {
 		// Fill hole in file.
