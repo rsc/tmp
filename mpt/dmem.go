@@ -73,12 +73,11 @@ func (t *diskTree) snap() error {
 		return nil
 	}
 
-	if err := t.hdr().setEpoch(t, t.hdr().epoch()+1); err != nil {
-		return err
-	}
-	if err := t.hdr().setDirty(t, false); err != nil {
-		return err
-	}
+	// Note: Not using a mutation group because we might be
+	// updating arbitrarily many hashes during rehash.
+	// Without group, ordering matters: write hash before dirty
+	// and both before epoch.
+
 	root, err := t.node(t.hdr().root())
 	if err != nil {
 		return err
@@ -90,6 +89,12 @@ func (t *diskTree) snap() error {
 	if err := t.hdr().setHash(t, hash); err != nil {
 		return err
 	}
+	if err := t.hdr().setDirty(t, false); err != nil {
+		return err
+	}
+	if err := t.hdr().setEpoch(t, t.hdr().epoch()+1); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -98,6 +103,13 @@ func (t *diskTree) Set(key Key, val Value) error {
 	if t.err != nil {
 		return t.err
 	}
+
+	// Keep all writes for this Set in the same group.
+	// We write one node and the dirty field for log N nodes,
+	// so it fits easily in the mutation group limit.
+	t.pmem.BeginGroup()
+	defer t.pmem.EndGroup()
+
 	if !t.hdr().dirty() {
 		if err := t.hdr().setDirty(t, true); err != nil {
 			return err

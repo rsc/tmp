@@ -5,8 +5,6 @@
 package mpt
 
 import (
-	"bytes"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
@@ -16,11 +14,9 @@ import (
 	"io"
 	"os"
 	"runtime"
-	"runtime/debug"
 
 	"rsc.io/tmp/mpt/internal/pmem"
 	"rsc.io/tmp/mpt/internal/slicemath"
-	"rsc.io/tmp/mpt/internal/span"
 )
 
 // On-Disk Tree
@@ -132,16 +128,12 @@ var _ pmem.File = File(nil)
 
 // A diskTree is an on-disk [Tree].
 type diskTree struct {
-	id      [16]byte
-	current diskWriter
-	next    diskWriter
-	span    *span.Span
-	useSync bool // whether to sync files (false for /dev/null)
-	mem     []byte
-	mut     addr
-	patch   []byte // pending patch
-	err     error  // sticky error
-	compact diskCompact
+	pmem   *pmem.Mem
+	mem    []byte // cache of pmem.Data()
+	file1  File
+	file2  File
+	closed bool
+	err    error // sticky error
 }
 
 // broken marks the tree broken with err as the reason.
@@ -181,22 +173,16 @@ type diskWriter struct {
 // The files must not already exist, unless they are both os.DevNull,
 // in which case the Tree is held only in memory.
 func Create(file1, file2 string) (Tree, error) {
-	sync := true
-	mode := os.O_WRONLY | os.O_CREATE | os.O_EXCL
-	if file1 == os.DevNull && file2 == os.DevNull {
-		mode &^= os.O_EXCL
-		sync = false
-	}
-	return open(file1, file2, mode, "create", sync)
+	return open(file1, file2, os.O_WRONLY|os.O_CREATE|os.O_EXCL, "create")
 }
 
 // Open opens an on-disk [Tree] stored in the two named files.
 // The files must have been created by a previous call to [Create].
 func Open(file1, file2 string) (Tree, error) {
-	return open(file1, file2, os.O_RDWR, "open", true)
+	return open(file1, file2, os.O_RDWR, "open")
 }
 
-func open(file1, file2 string, mode int, op string, sync bool) (Tree, error) {
+func open(file1, file2 string, mode int, op string) (Tree, error) {
 	f1, err := os.OpenFile(file1, mode, 0666)
 	if err != nil {
 		return nil, err
@@ -207,7 +193,7 @@ func open(file1, file2 string, mode int, op string, sync bool) (Tree, error) {
 		return nil, err
 	}
 
-	return diskOpen(f1, f2, op, sync)
+	return diskOpen(f1, f2, op)
 }
 
 // New creates or opens an on-disk [Tree] in the given files.
@@ -216,7 +202,16 @@ func open(file1, file2 string, mode int, op string, sync bool) (Tree, error) {
 // Only one file contains the latest tree at a time, but the
 // implementation alternates between files to implement atomic updates.
 func New(file1, file2 File) (Tree, error) {
-	return diskOpen(file1, file2, "new", true)
+	var op string
+	var buf [1]byte
+	n1, err1 := file1.ReadAt(buf[:], 0)
+	n2, err2 := file2.ReadAt(buf[:], 0)
+	if n1 == 0 && n2 == 0 && err1 == io.EOF && err2 == io.EOF {
+		op = "create"
+	} else {
+		op = "open"
+	}
+	return diskOpen(file1, file2, op)
 }
 
 func setActive(f File, b bool) {
@@ -231,328 +226,94 @@ func setActive(f File, b bool) {
 // try to use the files' Sync method.
 // (When using /dev/null for an in-memory tree,
 // we avoid calling Sync, because it will fail.)
-func diskOpen(file1, file2 File, op string, sync bool) (Tree, error) {
-	sp, err := span.Reserve(maxTree)
+func diskOpen(file1, file2 File, op string) (_ Tree, err error) {
+	pmemOp := pmem.Open
+	if op == "create" {
+		pmemOp = pmem.Create
+	}
+	mem, err := pmemOp("mpt tree\n", file1, file2)
 	if err != nil {
 		return nil, err
 	}
 	t := &diskTree{
-		span:    sp,
-		useSync: sync,
-		patch:   make([]byte, 0, maxPatch),
-		compact: diskCompact{
-			hash: sha256.New(),
-		},
+		pmem:  mem,
+		file1: file1,
+		file2: file2,
 	}
-
-	runtime.AddCleanup(t, func(*struct{}) { sp.Release() }, nil)
-
-	if op == "new" {
-		var buf [1]byte
-		n1, err1 := file1.ReadAt(buf[:], 0)
-		n2, err2 := file2.ReadAt(buf[:], 0)
-		if n1 == 0 && n2 == 0 && err1 == io.EOF && err2 == io.EOF {
-			op = "create"
-		} else {
-			op = "open"
+	defer func() {
+		if err != nil {
+			mem.Release()
+			mem.UnsafeUnmap()
 		}
-	}
+	}()
+
+	runtime.AddCleanup(t, func(*struct{}) { mem.Release() }, nil)
 
 	if op == "create" {
-		mem, err := sp.Expand(hdrSize)
+		// Write initial tree.
+		mem, err := t.pmem.Expand(hdrSize)
 		if err != nil {
 			return nil, err
 		}
-		t.mem = mem
-		t.mut = addr(len(mem))
-		*(*Hash)(mem[hdrHash:]) = emptyTreeHash()
-		rand.Read(t.id[:])
-		t.current.file = file1
-		setActive(file1, true)
-		t.current.seq = 1
-		t.next.file = file2
-		t.next.seq = 0
-		if err := t.writeTree(&t.current); err != nil {
+		h := emptyTreeHash()
+		if err := t.mutate(mem[hdrHash:], h[:]); err != nil {
 			return nil, err
 		}
-		if err := t.sync(&t.current); err != nil {
+		if err := t.pmem.Sync(); err != nil {
 			return nil, err
 		}
-		if err := t.writeTree(&t.next); err != nil {
-			return nil, err
-		}
-		if err := t.sync(&t.next); err != nil {
-			return nil, err
-		}
-		return t, nil
 	}
 
-	id1, seq1, n1, err := readStart(file1)
-	if err != nil {
-		return nil, err
-	}
-	id2, seq2, n2, err := readStart(file2)
-	if err != nil {
-		return nil, err
-	}
-	if id1 != id2 {
-		return nil, fmt.Errorf("inconsistent tree files: id %x != %x", id1[:], id2[:])
-	}
-	t.id = id1
-	if seq1 != 0 && seq1 == seq2 {
-		return nil, fmt.Errorf("inconsistent tree files: both seq %d", seq1)
-	}
-	if seq1 < seq2 {
-		file1, file2, seq1, seq2, n1, n2 = file2, file1, seq2, seq1, n2, n1
-	}
-
-	r := &diskReader{file: file1, seq: seq1}
-	if err := t.readTree(r, n1); err != nil {
-		return nil, err
-	}
-	t.current.file = file1
-	setActive(file1, true)
-	t.current.off = r.off
-	t.current.seq = seq1
-	t.next.file = file2
-	t.next.seq = 0
+	t.mem = t.pmem.Data()
 
 	return t, nil
 }
 
-// readTree reads an entire tree from r.
-// It expects an initial tree image of length treeLen bytes
-// followed by any number of patch blocks modifying or
-// extending that image.
-func (t *diskTree) readTree(r *diskReader, treeLen int) error {
-	mem, err := t.span.Expand(treeLen)
-	if err != nil {
-		return t.broken(err)
-	}
-	var buf [len(magic)]byte
-	if _, err := r.file.ReadAt(buf[:], 0); err != nil {
-		return t.broken(err)
-	}
-	if string(buf[:]) != magic {
-		return t.broken(errCorrupt)
-	}
-	r.off = int64(len(magic))
-	n, err := t.readFrame(r, mem)
-	if err != nil {
-		return err
-	}
-	if n != treeLen {
-		return t.broken(errCorrupt)
-	}
-	t.mem = mem
-	t.mut = addr(len(mem))
-
-	patch := make([]byte, maxPatch)
-	for {
-		n, err := t.readFrame(r, patch)
-		if err == errCorrupt || err == io.EOF || err == io.ErrUnexpectedEOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-		if err := t.replay(patch[:n]); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// magic is the header identifying an on-disk Tree.
-const magic = "mptTree\n"
-
-// readStart reads and returns the first frame's metadata
-// (tree ID, sequence number, and tree length in bytes).
-func readStart(r io.ReaderAt) (id [16]byte, seq uint64, n int, err error) {
-	var buf [len(magic) + frameSize]byte
-	if _, err = r.ReadAt(buf[:], 0); err != nil {
-		return
-	}
-	if string(buf[:len(magic)]) != magic {
-		err = fmt.Errorf("not a tree file")
-		return
-	}
-	copy(id[:], buf[len(magic)+frameID:])
-	seq = binary.BigEndian.Uint64(buf[len(magic)+frameSeq:])
-	u := binary.BigEndian.Uint64(buf[len(magic)+frameLen:])
-	if uint64(int(u)) != u || int(u) < 0 || u > uint64(maxTree) {
-		err = fmt.Errorf("invalid length %#x", u)
-	}
-	n = int(u)
-	return
-}
-
-var errCorrupt = errors.New("corrupt data")
-
-// readFrame reads a single framed block from r.
-// A frame consists of frame metadata, data, and a SHA256 checksum.
-func (t *diskTree) readFrame(r *diskReader, data []byte) (int, error) {
-	var frame [frameSize]byte
-	if _, err := r.file.ReadAt(frame[:], r.off); err != nil {
-		return 0, t.broken(err)
-	}
-	r.off += frameSize
-	if [16]byte(frame[frameID:]) != t.id {
-		return 0, t.broken(errCorrupt)
-	}
-	if binary.BigEndian.Uint64(frame[frameSeq:]) != r.seq {
-		return 0, t.broken(errCorrupt)
-	}
-	n := binary.BigEndian.Uint64(frame[frameLen:])
-	if n > uint64(len(data)) {
-		return 0, t.broken(errCorrupt)
-	}
-
-	if _, err := r.file.ReadAt(data[:n], r.off); err != nil {
-		return 0, t.broken(err)
-	}
-	r.off += int64(n)
-
-	var fsum [32]byte
-	if _, err := r.file.ReadAt(fsum[:], r.off); err != nil {
-		return 0, t.broken(err)
-	}
-	r.off += int64(len(fsum))
-	sum := shaPair(frame[:], data[:n])
-	if sum != fsum {
-		return 0, t.broken(errCorrupt)
-	}
-
-	return int(n), nil
-}
-
-// writeTree writes the initial tree memory image to w,
-// labeling it with the given tree sequence number.
-func (t *diskTree) writeTree(w *diskWriter) error {
-	if _, err := w.file.WriteAt([]byte(magic), 0); err != nil {
-		return t.broken(err)
-	}
-	w.off = int64(len(magic))
-	return t.writeFrame(w, t.mem)
-}
-
-// writeFrame writes a frame containing data to w.
-func (t *diskTree) writeFrame(w *diskWriter, data []byte) error {
-	var frame [frameSize]byte
-	copy(frame[frameID:], t.id[:])
-	binary.BigEndian.PutUint64(frame[frameSeq:], w.seq)
-	binary.BigEndian.PutUint64(frame[frameLen:], uint64(len(data)))
-
-	h := sha256.New()
-	h.Write(frame[:])
-	if _, err := w.file.WriteAt(frame[:], w.off); err != nil {
-		return t.broken(err)
-	}
-	w.off += frameSize
-
-	h.Write(data)
-	if _, err := w.file.WriteAt(data, w.off); err != nil {
-		return t.broken(err)
-	}
-	w.off += int64(len(data))
-
-	sum := h.Sum(nil)
-	if _, err := w.file.WriteAt(sum, w.off); err != nil {
-		return t.broken(err)
-	}
-	w.off += int64(len(sum))
-
-	return nil
-}
-
-// writeFrameSeq updates a frame header at the given offset,
-// replacing the sequence number with seq and leaving the
-// rest of the frame header unmodified.
-func (t *diskTree) writeFrameSeq(w io.WriterAt, off int64, seq uint64) error {
-	var buf [8]byte
-	binary.BigEndian.PutUint64(buf[:], seq)
-	_, err := w.WriteAt(buf[:], off+frameSeq)
-	return t.broken(err)
-}
-
-// flushPatch flushes the current patch buffer to disk.
-func (t *diskTree) flushPatch() error {
-	if err := t.writeFrame(&t.current, t.patch); err != nil {
-		return err
-	}
-	if t.next.seq != 0 { // active compaction; patch t.next as well
-		if err := t.writeFrame(&t.next, t.patch); err != nil {
-			return err
-		}
-	}
-	t.patch = t.patch[:0]
-	return nil
-}
-
-// sync calls w.file.Sync, unless t.useSync is false.
-func (t *diskTree) sync(w *diskWriter) error {
-	if !t.useSync {
-		return nil
-	}
-	if err := w.file.Sync(); err != nil {
-		return t.broken(err)
-	}
-	return nil
-}
+var errCorrupt = errors.New("corrupt tree data")
 
 // Sync syncs written data to disk.
 func (t *diskTree) Sync() error {
 	if t.err != nil {
 		return t.err
 	}
-	if err := t.flushPatch(); err != nil {
-		return err
-	}
-	if err := t.sync(&t.current); err != nil {
-		t.err = err
-		return err
+	if err := t.pmem.Sync(); err != nil {
+		return t.broken(err)
 	}
 	return nil
 }
 
-// Close closes the tree.
+// TODO figure out whether pmem should Close.
+
+// Close closes the tree and the files it uses.
 func (t *diskTree) Close() error {
 	if err := t.Sync(); err != nil {
 		t.broken(err)
 	}
-	if t.mem != nil {
-		if err := t.span.Release(); err != nil {
-			t.broken(err)
-		}
-		t.mem = nil
+	if t.closed {
+		return fmt.Errorf("tree already closed")
 	}
-	if err := t.current.file.Close(); err != nil {
+	if err := t.pmem.Release(); err != nil {
 		t.broken(err)
 	}
-	if err := t.next.file.Close(); err != nil {
+	if err := t.file1.Close(); err != nil {
+		t.broken(err)
+	}
+	if err := t.file2.Close(); err != nil {
 		t.broken(err)
 	}
 	if t.err != nil {
 		return t.err
 	}
-	t.err = errors.New("tree is closed")
+	t.closed = true
+	t.err = errors.New("tree is closed") // stop future method calls
 	return nil
 }
 
 func (t *diskTree) UnsafeUnmap() error {
-	if t.mem != nil {
+	if !t.closed {
 		return fmt.Errorf("UnsafeUnmap without Close")
 	}
-	return t.span.UnsafeUnmap()
-}
-
-// memHash returns a short hash of the current memory content,
-// useful for debugging and testing.
-func (t *diskTree) memHash() string {
-	h := sha256.Sum256(t.mem[:t.mut])
-	s := base64.StdEncoding.EncodeToString(h[:])
-	return fmt.Sprintf("%s/%#x", s[:7], t.mut)
+	return t.pmem.UnsafeUnmap()
 }
 
 // TODO: this whole memory file logic could be separated out into its own package
@@ -564,149 +325,10 @@ func (t *diskTree) memHash() string {
 // It also records the mutation in the patch buffer, to be written
 // to disk when the current patch block fills or Sync is called.
 func (t *diskTree) mutate(dst, src []byte) error {
-	if len(src) > 255 || len(src) > len(dst) {
-		// This is a code bug; highlight where it is by adding stack.
-		return t.broken(fmt.Errorf("mutation too large\n%s", debug.Stack()))
-	}
-	if bytes.Equal(dst, src) {
-		return nil
-	}
-	var buf [7]byte
-	a := t.memToAddr(dst)
-	putAddr(buf[:], a)
-	buf[6] = byte(len(src))
-	if cap(t.patch)-len(t.patch) < len(buf)+len(src) {
-		n := len(t.patch)
-		if err := t.flushPatch(); err != nil {
-			return err
-		}
-		t.maybeCompact(2 * n)
-	}
-	t.patch = append(t.patch, buf[:]...)
-	t.patch = append(t.patch, src...)
-	// h := t.memHash()
-	t.mut = max(t.mut, a+addr(len(src)))
-	copy(dst, src)
-	// println("mut", h, t.memHash(), "\n\n", string(hex.Dump(t.mem)))
-
-	return nil
-}
-
-// replay applies the mutations listed in patch to the in-memory tree.
-// It expands t.mem as needed to apply the patch.
-func (t *diskTree) replay(patch []byte) error {
-	for len(patch) > 0 {
-		if len(patch) < 7 {
-			return t.broken(errCorrupt)
-		}
-		a := parseAddr(patch)
-		n := int(patch[6])
-		patch = patch[7:]
-		if n == 0 || n > len(patch) {
-			return t.broken(errCorrupt)
-		}
-		if a+addr(n) > addr(len(t.mem)) {
-			// Individual patches are never more than a couple hundred bytes,
-			// If the address is far beyond the end of the tree, it's wrong.
-			if a+addr(n) > addr(len(t.mem))+1<<20 {
-				return t.broken(errCorrupt)
-			}
-			mem, err := t.span.Expand(int(a + addr(n)))
-			if err != nil {
-				return t.broken(err)
-			}
-			t.mem = mem
-		}
-		copy(t.mem[a:], patch[:n])
-		t.mut = max(t.mut, a+addr(n))
-		patch = patch[n:]
-	}
-	return nil
-}
-
-// maybeCompact runs a bit of compaction if needed,
-// limiting I/O to writing at most n data bytes plus some framing.
-func (t *diskTree) maybeCompact(n int) error {
-	if t.next.seq == 0 && t.current.off < 2*int64(len(t.mem)) {
-		// Current disk file is less than twice the tree memory.
-		// Not worth compacting yet.
-		return nil
-	}
-
-	c := &t.compact
-	if t.next.seq == 0 {
-		// Start a new compaction.
-		// Record current tree size (but not content),
-		// so we know where patches should be written.
-		c.end = int(t.mut)
-		c.off = 0
-		c.hash.Reset()
-
-		t.next.off = int64(len(magic) + frameSize + c.end + 32)
-		t.next.seq = t.current.seq + 1
-
-		// Hash the correct frame header.
-		var frame [frameSize]byte
-		copy(frame[frameID:], t.id[:])
-		binary.BigEndian.PutUint64(frame[frameSeq:], t.next.seq)
-		binary.BigEndian.PutUint64(frame[frameLen:], uint64(c.end))
-		c.hash.Write(frame[:])
-
-		// But write seq=0 to disk for now, so that if we crash before finishing,
-		// the next Open will not try to use this file.
-		// We will write the correct sequence number once everything is on disk.
-		binary.BigEndian.PutUint64(frame[frameSeq:], 0)
-		if _, err := t.next.file.WriteAt(frame[:], int64(len(magic))); err != nil {
-			return t.broken(err)
-		}
-	}
-
-	// Write at most n bytes of data, both to c.hash and to t.next.file.
-	//
-	// Note: If compaction were running in parallel with writes,
-	// we could copy from c.mem racily into a buffer and then write
-	// the buffer to both the hash and the file. As long as they are
-	// consistent, any racy reads would not matter, since the writes
-	// we are racing against would be written in patch form, even if
-	// we didn't see them here. However, since we run compaction
-	// interleaved with other work, there should be no writes to c.mem,
-	// and we can read from it twice.
-	n = min(n, c.end-c.off)
-	c.hash.Write(t.mem[c.off : c.off+n])
-	if _, err := t.next.file.WriteAt(t.mem[c.off:c.off+n], int64(len(magic)+frameSize+c.off)); err != nil {
+	n := min(len(dst), len(src))
+	if err := t.pmem.Mutate(dst[:n], src[:n]); err != nil {
 		return t.broken(err)
 	}
-	c.off += n
-
-	if c.off < c.end {
-		// Not finished. Wait for next call.
-		return nil
-	}
-
-	// Wrote entire tree image. Finish and switch.
-	sum := c.hash.Sum(nil)
-	if _, err := t.next.file.WriteAt(sum[:], int64(len(magic)+frameSize+c.off)); err != nil {
-		return t.broken(err)
-	}
-
-	// Open will start using the tree when the bigger sequence number hits the disk,
-	// so we want to make sure that happens last.
-	// Sync entire tree to disk, then update sequence number, then sync again.
-	if err := t.sync(&t.next); err != nil {
-		return err
-	}
-	if err := t.writeFrameSeq(t.next.file, int64(len(magic)), t.next.seq); err != nil {
-		return err
-	}
-	if err := t.sync(&t.next); err != nil {
-		return err
-	}
-
-	// Switch current and next.
-	t.current, t.next = t.next, t.current
-	setActive(t.current.file, true)
-	setActive(t.next.file, false)
-	t.next.seq = 0
 	return nil
 }
 
@@ -728,14 +350,10 @@ func (t *diskTree) memToAddr(p []byte) addr {
 	return addr(off)
 }
 
-// spanChunk is the minimum size by which t.span is expanded.
-// It is far larger than any individual allocation size.
-const spanChunk = 64 << 20
-
 // alloc allocates n more bytes of tree memory, returning it as a slice.
 func (t *diskTree) alloc(n int) ([]byte, error) {
 	if cap(t.mem)-len(t.mem) < n {
-		mem, err := t.span.Expand(len(t.mem) + spanChunk)
+		mem, err := t.pmem.Expand(len(t.mem) + n)
 		if err != nil {
 			t.err = err
 			return nil, err
@@ -907,10 +525,8 @@ func (n *diskNode) setDirty(t *diskTree, d bool) error {
 	return t.mutate(n[nodeDirty:], p[:])
 }
 
-// shaPair returns the SHA256 hash of x+y.
-func shaPair(x, y []byte) [32]byte {
-	h := sha256.New()
-	h.Write(x)
-	h.Write(y)
-	return [32]byte(h.Sum(nil))
+func (t *diskTree) memHash() string {
+	h := sha256.Sum256(t.mem)
+	s := base64.StdEncoding.EncodeToString(h[:])
+	return fmt.Sprintf("%s/%#x", s[:7], len(t.mem))
 }

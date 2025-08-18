@@ -94,7 +94,7 @@ func testRecovery(t *testing.T) {
 		}
 	}
 
-	check(t, mem.Close())
+	check(t, mem.Release())
 	check(t, mem.UnsafeUnmap())
 }
 
@@ -267,7 +267,7 @@ func (tt *tester) reopen(format string, args ...any) {
 	if !tt.valid[h] {
 		tt.t.Fatalf("reopen (%d %d): %s: invalid hash %v want %v\n\n%s\n\n%s\n\n%s", len(tt.file[0].data), len(tt.file[1].data), kind, h, tt.valid, debug.Stack(), hex.Dump(tt.mem.mem), hex.Dump(mem.mem))
 	}
-	check(tt.t, mem.Close())
+	check(tt.t, mem.Release())
 	check(tt.t, mem.UnsafeUnmap())
 }
 

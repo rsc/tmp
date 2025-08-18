@@ -9,8 +9,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math/rand"
-	"os"
 	"strings"
 	"testing"
 )
@@ -216,8 +216,22 @@ func testMemTree(t *testing.T) *testTree {
 	return &testTree{t: t, tree: NewMemTree()}
 }
 
+// DevNull returns a file like the Unix /dev/null: it can be written but is always empty.
+// Passing two DevNull files to New creates a Mem with no on-disk backing.
+func DevNull() File {
+	return new(devNull)
+}
+
+type devNull struct{}
+
+func (*devNull) ReadAt(b []byte, off int64) (int, error)  { return 0, io.EOF }
+func (*devNull) WriteAt(b []byte, off int64) (int, error) { return len(b), nil }
+
+func (*devNull) Close() error { return nil }
+func (*devNull) Sync() error  { return nil }
+
 func newDiskTree() Tree {
-	t, err := Create(os.DevNull, os.DevNull)
+	t, err := New(DevNull(), DevNull())
 	if err != nil {
 		panic(err)
 	}

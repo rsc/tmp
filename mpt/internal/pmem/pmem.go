@@ -105,7 +105,6 @@ var errCorrupt = errors.New("corrupt input file")
 type File interface {
 	io.ReaderAt
 	io.WriterAt
-	io.Closer
 	Sync() error
 }
 
@@ -120,8 +119,7 @@ type devNull struct{}
 func (*devNull) ReadAt(b []byte, off int64) (int, error)  { return 0, io.EOF }
 func (*devNull) WriteAt(b []byte, off int64) (int, error) { return len(b), nil }
 
-func (*devNull) Close() error { return nil }
-func (*devNull) Sync() error  { return nil }
+func (*devNull) Sync() error { return nil }
 
 // A Mem represents a persistent memory backed by a pair of on-disk files.
 // The files must implement the [File] interface ([os.File] is the usual implementation).
@@ -186,9 +184,10 @@ type reader struct {
 
 // A writer is the state for writing to an output file.
 type writer struct {
-	file File
-	seq  uint64 // file sequence number
-	off  int64  // write offset in file
+	file  File
+	seq   uint64 // file sequence number
+	off   int64  // write offset in file
+	wrote bool   // any writes since last sync?
 
 	hash hash.Hash
 	tmp  [max(hashSize, frameSize)]byte
@@ -266,6 +265,7 @@ func create(magic string, file1, file2 File) (_ *Mem, err error) {
 	defer func() {
 		if err != nil {
 			m.span.Release()
+			m.span.UnsafeUnmap()
 		}
 	}()
 
@@ -284,14 +284,30 @@ func create(magic string, file1, file2 File) (_ *Mem, err error) {
 }
 
 func (m *Mem) writeEmptyTree(w *writer) error {
-	if _, err := w.file.WriteAt([]byte(m.magic), w.off); err != nil {
+	if err := w.write([]byte(m.magic)); err != nil {
 		return m.broken(err)
 	}
-	w.off += int64(len(m.magic))
 	if err := m.writeFrame(w, nil); err != nil {
 		return err
 	}
 	return m.sync(w)
+}
+
+func (w *writer) write(b []byte) error {
+	if _, err := w.file.WriteAt(b, w.off); err != nil {
+		return err
+	}
+	w.off += int64(len(b))
+	w.wrote = true
+	return nil
+}
+
+func (w *writer) writeAt(b []byte, off int64) error {
+	if _, err := w.file.WriteAt(b, off); err != nil {
+		return err
+	}
+	w.wrote = true
+	return nil
 }
 
 // Open opens the memory stored in the file pair.
@@ -310,6 +326,7 @@ func open(magic string, file1, file2 File) (_ *Mem, err error) {
 	defer func() {
 		if err != nil {
 			m.span.Release()
+			m.span.UnsafeUnmap()
 		}
 	}()
 
@@ -511,6 +528,9 @@ func (m *Mem) Data() []byte {
 // Expand extends the length of the current memory
 // to be at least n bytes and returns the extended slice.
 func (m *Mem) Expand(n int) ([]byte, error) {
+	if n > 0x10000 {
+		panic("EXPAND")
+	}
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -709,22 +729,19 @@ func (m *Mem) writeFrame(w *writer, data []byte) error {
 
 	w.hash.Reset()
 	w.hash.Write(f)
-	if _, err := w.file.WriteAt(f, w.off); err != nil {
+	if err := w.write(f); err != nil {
 		return m.broken(err)
 	}
-	w.off += frameSize
 
 	w.hash.Write(data)
-	if _, err := w.file.WriteAt(data, w.off); err != nil {
+	if err := w.write(data); err != nil {
 		return m.broken(err)
 	}
-	w.off += int64(len(data))
 
 	sum := w.hash.Sum(w.tmp[:0])
-	if _, err := w.file.WriteAt(sum, w.off); err != nil {
+	if err := w.write(sum); err != nil {
 		return m.broken(err)
 	}
-	w.off += int64(len(sum))
 
 	return nil
 }
@@ -761,7 +778,7 @@ func (m *Mem) maybeCompact(n int) error {
 		// the next Open will not try to use this file.
 		// We will write the correct sequence number once everything is on disk.
 		binary.BigEndian.PutUint64(frame[frameSeq:], 0)
-		if _, err := m.next.file.WriteAt(frame[:], int64(len(m.magic))); err != nil {
+		if err := m.next.writeAt(frame[:], int64(len(m.magic))); err != nil {
 			return m.broken(err)
 		}
 	}
@@ -779,7 +796,7 @@ func (m *Mem) maybeCompact(n int) error {
 	if c.off < c.end && n > 0 {
 		n := min(n, c.end-c.off)
 		c.hash.Write(m.mem[c.off : c.off+n])
-		if _, err := m.next.file.WriteAt(m.mem[c.off:c.off+n], int64(len(m.magic)+frameSize+c.off)); err != nil {
+		if err := m.next.writeAt(m.mem[c.off:c.off+n], int64(len(m.magic)+frameSize+c.off)); err != nil {
 			return m.broken(err)
 		}
 		c.off += n
@@ -799,7 +816,7 @@ func (m *Mem) maybeCompact(n int) error {
 
 	// Wrote entire tree image. Finish and switch.
 	sum := c.hash.Sum(nil)
-	if _, err := m.next.file.WriteAt(sum[:], int64(len(m.magic)+frameSize+c.off)); err != nil {
+	if err := m.next.writeAt(sum[:], int64(len(m.magic)+frameSize+c.off)); err != nil {
 		return m.broken(err)
 	}
 
@@ -809,7 +826,7 @@ func (m *Mem) maybeCompact(n int) error {
 	if err := m.sync(m.next); err != nil {
 		return err
 	}
-	if err := m.writeFrameSeq(m.next.file, int64(len(m.magic)), m.next.seq); err != nil {
+	if err := m.writeFrameSeq(m.next, int64(len(m.magic)), m.next.seq); err != nil {
 		return err
 	}
 	if err := m.sync(m.next); err != nil {
@@ -827,10 +844,9 @@ func (m *Mem) maybeCompact(n int) error {
 // writeFrameSeq updates a frame header at the given offset,
 // replacing the sequence number with seq and leaving the
 // rest of the frame header unmodified.
-func (m *Mem) writeFrameSeq(w io.WriterAt, off int64, seq uint64) error {
+func (m *Mem) writeFrameSeq(w *writer, off int64, seq uint64) error {
 	binary.BigEndian.PutUint64(m.tmp[:], seq)
-	_, err := w.WriteAt(m.tmp[:8], off+frameSeq)
-	if err != nil {
+	if err := w.writeAt(m.tmp[:8], off+frameSeq); err != nil {
 		return m.broken(err)
 	}
 	return nil
@@ -871,23 +887,27 @@ func (m *Mem) Sync() error {
 }
 
 func (m *Mem) sync(w *writer) error {
-	if err := w.file.Sync(); err != nil {
-		return m.broken(err)
+	if w.wrote {
+		if err := w.file.Sync(); err != nil {
+			return m.broken(err)
+		}
+		w.wrote = false
 	}
 	return nil
 }
 
-// Close closes the memory and makes the in-memory data unreadable.
+// Releasesyncs the memory and makes the in-memory data unreadable.
 // Future accesses to the slice data will fault, causing the program to crash,
 // unless [runtime/debug.SetPanicOnFault] has changed the fault behavior.
 //
-// Closes releases the Mem's physical memory back to the operating system,
+// Release releases the Mem's physical memory back to the operating system,
 // so that it can be used for other purposes.
-// However, to make Close a safe operation, Close does not release the virtual
-// address space, which only costs a few kilobytes to maintain until the process exits.
+// However, to make Release a safe operation, Release preserves the virtual
+// address space reservation, which only costs a few kilobytes to maintain
+// until the process exits.
 // To release the virtual address space, see [Mem.UnsafeUnmap],
 // but read and understand the warnings in its doc comment before using it.
-func (m *Mem) Close() error {
+func (m *Mem) Release() error {
 	// Collect errors as we go, but make sure to reach end. No early returns.
 	m.Sync()
 	if m.mem != nil {
@@ -895,12 +915,6 @@ func (m *Mem) Close() error {
 			m.broken(err)
 		}
 		m.mem = nil
-	}
-	if err := m.current.file.Close(); err != nil {
-		m.broken(err)
-	}
-	if err := m.next.file.Close(); err != nil {
-		m.broken(err)
 	}
 	m.closed = true
 	if m.err != nil {
