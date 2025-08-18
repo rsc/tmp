@@ -165,6 +165,8 @@ func (tt *tester) reopen(format string, args ...any) {
 	if !tt.valid[h] {
 		tt.t.Fatalf("reopen (%d %d): %s: invalid hash %v want %v\n\n%s\n\n%s\n\n%s", len(tt.file[0].data), len(tt.file[1].data), kind, h, tt.valid, debug.Stack(), hex.Dump(tt.tree.mem), hex.Dump(tree.(*diskTree).mem))
 	}
+	tree.Close()
+	tree.UnsafeUnmap()
 }
 
 func TestDiskRecovery(t *testing.T) {
@@ -215,6 +217,7 @@ func testDiskRecovery(t *testing.T) {
 	}
 
 	check(t, tree.Close())
+	check(t, tree.UnsafeUnmap())
 }
 
 func TestDiskReopen(t *testing.T) {
@@ -226,6 +229,7 @@ func TestDiskReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(t, err)
+	defer tree1.UnsafeUnmap()
 	defer tree1.Close()
 
 	for i := range 10 {
@@ -238,6 +242,7 @@ func TestDiskReopen(t *testing.T) {
 
 	tree2, err := Open(dir+"/tree1", dir+"/tree2")
 	check(t, err)
+	defer tree2.UnsafeUnmap()
 	defer tree2.Close()
 
 	if !bytes.Equal(tree1.(*diskTree).mem, tree2.(*diskTree).mem) {

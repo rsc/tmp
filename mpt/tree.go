@@ -52,6 +52,7 @@ type Tree interface {
 	// TODO explain
 	Sync() error
 	Close() error
+	UnsafeUnmap() error
 }
 
 // ErrModifiedTree indicates that Prove was called after a Set without a Snap.

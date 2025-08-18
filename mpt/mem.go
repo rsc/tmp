@@ -86,6 +86,8 @@ func (t *memTree) Close() error {
 	return nil
 }
 
+func (t *memTree) UnsafeUnmap() error { return nil }
+
 // Snap returns a snapshot of t.
 func (t *memTree) Snap() (Snapshot, error) {
 	if t.err != nil {

@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"runtime/debug"
 
+	"rsc.io/tmp/mpt/internal/pmem"
 	"rsc.io/tmp/mpt/internal/slicemath"
 	"rsc.io/tmp/mpt/internal/span"
 )
@@ -102,10 +103,11 @@ const (
 	addrSize = 6
 
 	// framing before memory image or patch block
-	frameID   = 0
-	frameSeq  = 16
-	frameLen  = 24
-	frameSize = 32
+	frameID    = 0
+	frameSeq   = 16
+	frameLen   = 24
+	frameSize  = 32
+	frameExtra = frameSize + 32
 )
 
 var (
@@ -122,6 +124,11 @@ type File interface {
 	io.Closer
 	Sync() error
 }
+
+// File must implement pmem.File.
+// It really should be exactly pmem.File but we don't want to
+// expose pmem in the API definitions, so File is a copy instead.
+var _ pmem.File = File(nil)
 
 // A diskTree is an on-disk [Tree].
 type diskTree struct {
@@ -531,6 +538,13 @@ func (t *diskTree) Close() error {
 	}
 	t.err = errors.New("tree is closed")
 	return nil
+}
+
+func (t *diskTree) UnsafeUnmap() error {
+	if t.mem != nil {
+		return fmt.Errorf("UnsafeUnmap without Close")
+	}
+	return t.span.UnsafeUnmap()
 }
 
 // memHash returns a short hash of the current memory content,
