@@ -169,7 +169,8 @@ type Mem struct {
 	closed    bool
 	compact   compact
 
-	syncHook func()
+	syncHook   func()
+	mutateHook func()
 }
 
 // A reader is the state for reading an input file.
@@ -612,6 +613,9 @@ func (m *Mem) mutate(off int, dst, src []byte) error {
 		m.groupData += len(src)
 	}
 	m.patched = max(m.patched, off+len(src))
+	if m.mutateHook != nil && m.group < 0 {
+		m.mutateHook()
+	}
 	return nil
 }
 
@@ -673,6 +677,10 @@ func (m *Mem) EndGroup() error {
 		m.patched = len(m.mem)
 	}
 	m.group = -1
+
+	if m.next.seq > 0 && m.compact.off == m.compact.end && len(m.patch) > 0 {
+		//m.flushPatch(false)
+	}
 	return nil
 }
 
@@ -768,15 +776,24 @@ func (m *Mem) maybeCompact(n int) error {
 	// we didn't see them here. However, since we run compaction
 	// interleaved with other work, there should be no writes to c.mem,
 	// and we can read from it twice.
-	n = min(n, c.end-c.off)
-	c.hash.Write(m.mem[c.off : c.off+n])
-	if _, err := m.next.file.WriteAt(m.mem[c.off:c.off+n], int64(len(m.magic)+frameSize+c.off)); err != nil {
-		return m.broken(err)
+	if c.off < c.end && n > 0 {
+		n := min(n, c.end-c.off)
+		c.hash.Write(m.mem[c.off : c.off+n])
+		if _, err := m.next.file.WriteAt(m.mem[c.off:c.off+n], int64(len(m.magic)+frameSize+c.off)); err != nil {
+			return m.broken(err)
+		}
+		c.off += n
 	}
-	c.off += n
 
-	if c.off < c.end {
+	if c.off < c.end || m.group >= 0 || len(m.patch) > 0 {
 		// Not finished. Wait for next call.
+		// Note that if c.off == c.end but m.group >= 0,
+		// then there is an active mutation group, and the memory image
+		// we wrote may include writes from that group.
+		// Similarly, if len(m.patch) > 0, the group may have ended
+		// but the patches have not yet been flushed
+		// (EndGroup will flush them for us but hasn't yet).
+		// We cannot complete the image until the group is flushed.
 		return nil
 	}
 

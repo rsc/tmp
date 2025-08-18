@@ -21,6 +21,8 @@ func TestRecovery(t *testing.T) {
 }
 
 func testRecovery(t *testing.T) {
+	tmp := make([]byte, 1000)
+
 	oldPatch := maxPatch
 	oldMem := maxMem
 	defer func() {
@@ -42,13 +44,12 @@ func testRecovery(t *testing.T) {
 	}
 	tt.setMem(mem)
 	tt.markOK()
-	tmp := make([]byte, 1000)
 
 	const (
 		MaxOff   = 100
 		MaxCount = 100
 	)
-	for range 100 {
+	for range 1000 {
 		switch rand.N(10) {
 		case 0, 1, 2, 3, 4:
 			// Write many random memory sections,
@@ -58,9 +59,9 @@ func testRecovery(t *testing.T) {
 				n := 1 + rand.N(MaxCount)
 				tt.t.Logf("mutate %#x+%#x", off, n)
 				_, err := mem.Expand(off + n)
+				tt.markOK()
 				check(tt.t, err)
 				check(tt.t, mem.Mutate(mem.Data()[off:off+n], randFill(tmp[:n])))
-				tt.markOK()
 			}
 
 		case 5, 6, 7, 8:
@@ -72,18 +73,19 @@ func testRecovery(t *testing.T) {
 			n2 := n - n1
 			off1 := rand.N(MaxOff)
 			off2 := rand.N(MaxOff)
-			_, err := mem.Expand(max(off1+n1, off2+n2))
-			check(tt.t, err)
-			tt.markOK()
-			tt.t.Logf("begingroup")
+			tt.t.Logf("begingroup (len=%#x)", len(mem.mem))
 			check(tt.t, mem.BeginGroup())
+			_, err := mem.Expand(off1 + n1)
+			check(tt.t, err)
 			tt.t.Logf("mutate %#x+%#x", off1, n1)
 			check(tt.t, mem.Mutate(mem.Data()[off1:off1+n1], randFill(tmp[:n1])))
+			_, err = mem.Expand(off2 + n2)
+			check(tt.t, err)
 			tt.t.Logf("mutate %#x+%#x", off2, n2)
 			check(tt.t, mem.Mutate(mem.Data()[off2:off2+n2], randFill(tmp[:n2])))
 			tt.t.Logf("endgroup")
-			check(tt.t, mem.EndGroup())
 			tt.markOK()
+			check(tt.t, mem.EndGroup())
 
 		case 9:
 			// Sync.
@@ -195,6 +197,7 @@ func (f *testFile) Sync() error {
 func (tt *tester) setMem(mem *Mem) {
 	tt.mem = mem
 	mem.syncHook = tt.syncHook
+	mem.mutateHook = tt.markOK
 	if tt.valid == nil {
 		tt.valid = make(map[string]bool)
 	}
@@ -204,6 +207,7 @@ func (tt *tester) setMem(mem *Mem) {
 }
 
 func (tt *tester) markOK() {
+	tt.t.Helper()
 	h := tt.mem.hash()
 	tt.t.Logf("ok %s", h)
 	tt.valid[h] = true
@@ -221,12 +225,7 @@ func (tt *tester) try(f *testFile) {
 		return
 	}
 
-	if tt.mem.group < 0 {
-		tt.markOK()
-	}
-
 	tt.reopen("as written")
-	return // TODO remove
 
 	// Test file truncated to last sync.
 	whole := f.data
