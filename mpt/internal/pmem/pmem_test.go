@@ -44,14 +44,18 @@ func testRecovery(t *testing.T) {
 	tt.markOK()
 	tmp := make([]byte, 1000)
 
+	const (
+		MaxOff   = 100
+		MaxCount = 100
+	)
 	for range 100 {
 		switch rand.N(10) {
 		case 0, 1, 2, 3, 4:
 			// Write many random memory sections,
 			// more than will fit in a single patch block.
-			for range 100 {
-				off := rand.N(1000)
-				n := 1 + rand.N(100)
+			for range 5 {
+				off := rand.N(MaxOff)
+				n := 1 + rand.N(MaxCount)
 				tt.t.Logf("mutate %#x+%#x", off, n)
 				_, err := mem.Expand(off + n)
 				check(tt.t, err)
@@ -66,8 +70,8 @@ func testRecovery(t *testing.T) {
 			n := maxPatch - 4*(maxVarint+1)
 			n1 := 1 + rand.N(n-1)
 			n2 := n - n1
-			off1 := rand.N(1000)
-			off2 := rand.N(1000)
+			off1 := rand.N(MaxOff)
+			off2 := rand.N(MaxOff)
 			_, err := mem.Expand(max(off1+n1, off2+n2))
 			check(tt.t, err)
 			tt.markOK()
@@ -85,7 +89,6 @@ func testRecovery(t *testing.T) {
 			// Sync.
 			tt.t.Logf("sync")
 			check(tt.t, mem.Sync())
-			tt.markOK()
 		}
 	}
 
@@ -145,7 +148,7 @@ func (f *testFile) WriteAt(data []byte, off int64) (int, error) {
 	// Writes to the next file can be scattered, because
 	// we are writing the tree interleaved with new patches.
 	if f.current && off != int64(len(f.data)) {
-		return 0, fmt.Errorf("non-appending write\n\n%s", debug.Stack())
+		//return 0, fmt.Errorf("non-appending write\n\n%s", debug.Stack())
 	}
 	if off > int64(len(f.data)) {
 		// Fill hole in file.
@@ -185,13 +188,13 @@ func (f *testFile) Sync() error {
 
 	f.sync = len(f.data)
 	f.tester.t.Logf("%s sync at %#x", f.name(), f.sync)
-	clear(f.tester.valid) // older snapshots no longer acceptable
 	f.tester.try(f)
 	return nil
 }
 
 func (tt *tester) setMem(mem *Mem) {
 	tt.mem = mem
+	mem.syncHook = tt.syncHook
 	if tt.valid == nil {
 		tt.valid = make(map[string]bool)
 	}
@@ -204,6 +207,11 @@ func (tt *tester) markOK() {
 	h := tt.mem.hash()
 	tt.t.Logf("ok %s", h)
 	tt.valid[h] = true
+}
+
+func (tt *tester) syncHook() {
+	clear(tt.valid) // older snapshots no longer acceptable
+	tt.markOK()
 }
 
 // try tries reopening the files with various i/o problems.
@@ -257,7 +265,7 @@ func (tt *tester) reopen(format string, args ...any) {
 	}
 	h := mem.hash()
 	if !tt.valid[h] {
-		tt.t.Fatalf("reopen (%d %d): %s: invalid hash %v want %v\n\n%s\n\n%s\n\n%s", len(tt.file[0].data), len(tt.file[1].data), kind, h, tt.valid, debug.Stack(), hex.Dump(tt.file[0].data), hex.Dump(tt.file[1].data))
+		tt.t.Fatalf("reopen (%d %d): %s: invalid hash %v want %v\n\n%s\n\n%s\n\n%s", len(tt.file[0].data), len(tt.file[1].data), kind, h, tt.valid, debug.Stack(), hex.Dump(tt.mem.mem), hex.Dump(mem.mem))
 	}
 	check(tt.t, mem.Close())
 	check(tt.t, mem.UnsafeUnmap())

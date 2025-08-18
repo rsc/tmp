@@ -167,8 +167,9 @@ type Mem struct {
 	groupData int // total group data
 	err       error
 	closed    bool
+	compact   compact
 
-	compact compact
+	syncHook func()
 }
 
 // A reader is the state for reading an input file.
@@ -405,7 +406,7 @@ func (r *reader) readFrame(data []byte) (int, error) {
 		return 0, err
 	}
 	if id != r.id || seq != r.seq || n > len(data) {
-		println("BAD seq", seq, r.seq, n, len(data))
+		//println("BAD seq", seq, r.seq, n, len(data))
 		return 0, errCorrupt
 	}
 	if _, err := r.file.ReadAt(data[:n], r.off); err != nil {
@@ -420,7 +421,7 @@ func (r *reader) readFrame(data []byte) (int, error) {
 	r.off += int64(len(fsum))
 	hsum := r.hash.Sum(r.tmp[hashSize:hashSize])
 	if [hashSize]byte(fsum) != [hashSize]byte(hsum) {
-		println("BAD hash")
+		//println("BAD hash")
 		return 0, errCorrupt
 	}
 	return n, nil
@@ -652,7 +653,7 @@ func (m *Mem) flushPatch(needSpace bool) error {
 		m.group = 0
 	}
 	//fmt.Printf("REMAIN\n%s\n", hex.Dump(m.patch))
-	return nil
+	return m.maybeCompact(2 * len(p))
 }
 
 // EndGroup finishes an atomic mutation group,
@@ -720,6 +721,110 @@ func (m *Mem) writeFrame(w *writer, data []byte) error {
 	return nil
 }
 
+// maybeCompact runs a bit of compaction if needed,
+// limiting I/O to writing at most n data bytes plus some framing.
+func (m *Mem) maybeCompact(n int) error {
+	if m.next.seq == 0 && m.current.off < 2*int64(len(m.mem)) {
+		// Current disk file is less than twice the tree memory.
+		// Not worth compacting yem.
+		return nil
+	}
+
+	c := &m.compact
+	if m.next.seq == 0 {
+		// Start a new compaction.
+		// Record current tree size (but not content),
+		// so we know where patches should be written.
+		c.end = len(m.mem)
+		c.off = 0
+		c.hash.Reset()
+
+		m.next.off = int64(len(m.magic) + frameSize + c.end + 32)
+		m.next.seq = m.current.seq + 1
+
+		// Hash the correct frame header.
+		var frame [frameSize]byte
+		copy(frame[frameID:], m.id[:])
+		binary.BigEndian.PutUint64(frame[frameSeq:], m.next.seq)
+		binary.BigEndian.PutUint64(frame[frameLen:], uint64(c.end))
+		c.hash.Write(frame[:])
+
+		// But write seq=0 to disk for now, so that if we crash before finishing,
+		// the next Open will not try to use this file.
+		// We will write the correct sequence number once everything is on disk.
+		binary.BigEndian.PutUint64(frame[frameSeq:], 0)
+		if _, err := m.next.file.WriteAt(frame[:], int64(len(m.magic))); err != nil {
+			return m.broken(err)
+		}
+	}
+
+	// Write at most n bytes of data, both to c.hash and to m.next.file.
+	//
+	// Note: If compaction were running in parallel with writes,
+	// we could copy from c.mem racily into a buffer and then write
+	// the buffer to both the hash and the file. As long as they are
+	// consistent, any racy reads would not matter, since the writes
+	// we are racing against would be written in patch form, even if
+	// we didn't see them here. However, since we run compaction
+	// interleaved with other work, there should be no writes to c.mem,
+	// and we can read from it twice.
+	n = min(n, c.end-c.off)
+	c.hash.Write(m.mem[c.off : c.off+n])
+	if _, err := m.next.file.WriteAt(m.mem[c.off:c.off+n], int64(len(m.magic)+frameSize+c.off)); err != nil {
+		return m.broken(err)
+	}
+	c.off += n
+
+	if c.off < c.end {
+		// Not finished. Wait for next call.
+		return nil
+	}
+
+	// Wrote entire tree image. Finish and switch.
+	sum := c.hash.Sum(nil)
+	if _, err := m.next.file.WriteAt(sum[:], int64(len(m.magic)+frameSize+c.off)); err != nil {
+		return m.broken(err)
+	}
+
+	// Open will start using the tree when the bigger sequence number hits the disk,
+	// so we want to make sure that happens lasm.
+	// Sync entire tree to disk, then update sequence number, then sync again.
+	if err := m.sync(m.next); err != nil {
+		return err
+	}
+	if err := m.writeFrameSeq(m.next.file, int64(len(m.magic)), m.next.seq); err != nil {
+		return err
+	}
+	if err := m.sync(m.next); err != nil {
+		return err
+	}
+
+	// Switch current and next.
+	m.current, m.next = m.next, m.current
+	setCurrent(m.current.file, true)
+	setCurrent(m.next.file, false)
+	m.next.seq = 0
+	return nil
+}
+
+// writeFrameSeq updates a frame header at the given offset,
+// replacing the sequence number with seq and leaving the
+// rest of the frame header unmodified.
+func (m *Mem) writeFrameSeq(w io.WriterAt, off int64, seq uint64) error {
+	binary.BigEndian.PutUint64(m.tmp[:], seq)
+	_, err := w.WriteAt(m.tmp[:8], off+frameSeq)
+	if err != nil {
+		return m.broken(err)
+	}
+	return nil
+}
+
+func setCurrent(f File, b bool) {
+	if f, ok := f.(interface{ setCurrent(bool) }); ok {
+		f.setCurrent(b)
+	}
+}
+
 // Sync flushes and syncs all memory changes to the underlying files.
 //
 // As changes are made with Mutate, they are flushed to disk
@@ -733,6 +838,9 @@ func (m *Mem) Sync() error {
 	}
 	if err := m.flushPatch(false); err != nil {
 		return err
+	}
+	if m.syncHook != nil {
+		m.syncHook()
 	}
 	if err := m.sync(m.current); err != nil {
 		return err
