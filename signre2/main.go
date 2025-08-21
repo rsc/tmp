@@ -51,6 +51,10 @@ func main() {
 	}
 	tag := flag.Arg(0)
 
+	os.RemoveAll("/tmp/re2")
+	os.Mkdir("/tmp/re2", 0777)
+	run("git", "clone", "https://code.googlesource.com/re2", ".")
+
 	if *delete {
 		gerrit("DELETE", "https://code-review.googlesource.com/a/projects/re2/tags/"+tag, nil, nil)
 	}
@@ -110,7 +114,9 @@ func main() {
 			}
 		}
 	}
-	out, err := exec.Command("git", "verify-tag", tag).CombinedOutput() // want stderr
+	cmd := exec.Command("git", "verify-tag", tag)
+	cmd.Dir = "/tmp/re2"
+	out, err := cmd.CombinedOutput() // want stderr
 	if err != nil {
 		log.Fatalf("git verify-tag %s: %v\n%s", tag, err, out)
 	}
@@ -189,6 +195,7 @@ func gerrit1(method, url string, in, out any) {
 
 func runInErr(stdin []byte, args ...string) ([]byte, error) {
 	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Dir = "/tmp/re2"
 	var stdout, stderr bytes.Buffer
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)

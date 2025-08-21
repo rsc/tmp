@@ -15,8 +15,15 @@ func (n *diskNode) hash(pbit int) Hash {
 	return n.ihash()
 }
 
-// unhash marks n's hash invalid.
-func (n *diskNode) unhash(t *diskTree) error {
+var lazyHash = false
+
+// unhash marks n's hash invalid or recomputes it,
+// depending on the [lazyHash] setting.
+func (n *diskNode) unhash(t *diskTree, pbit int) error {
+	if !lazyHash {
+		_, err := n.rehash(t, pbit, true)
+		return err
+	}
 	if n.dirty() {
 		return nil
 	}
@@ -24,17 +31,17 @@ func (n *diskNode) unhash(t *diskTree) error {
 }
 
 // rehash updates n.hash if needed and then returns it.
-func (n *diskNode) rehash(t *diskTree, pbit int) (Hash, error) {
+func (n *diskNode) rehash(t *diskTree, pbit int, force bool) (Hash, error) {
 	nbit := n.bit()
 	if nbit <= pbit {
 		return hashLeaf(n.key(), n.val()), nil
 	}
-	if n.dirty() {
+	if n.dirty() || force {
 		left, err := t.node(n.left())
 		if err != nil {
 			return Hash{}, err
 		}
-		lhash, err := left.rehash(t, nbit)
+		lhash, err := left.rehash(t, nbit, false)
 		if err != nil {
 			return Hash{}, err
 		}
@@ -42,7 +49,7 @@ func (n *diskNode) rehash(t *diskTree, pbit int) (Hash, error) {
 		if err != nil {
 			return Hash{}, err
 		}
-		rhash, err := right.rehash(t, nbit)
+		rhash, err := right.rehash(t, nbit, false)
 		if err != nil {
 			return Hash{}, err
 		}
@@ -82,7 +89,7 @@ func (t *diskTree) snap() error {
 	if err != nil {
 		return err
 	}
-	hash, err := root.rehash(t, -1)
+	hash, err := root.rehash(t, -1, false)
 	if err != nil {
 		return err
 	}
@@ -136,7 +143,7 @@ func (t *diskTree) Set(key Key, val Value) error {
 		if err != nil {
 			return err
 		}
-		if err := root.unhash(t); err != nil {
+		if err := root.unhash(t, -1); err != nil {
 			return err
 		}
 	}
@@ -168,7 +175,7 @@ func (n *diskNode) set(t *diskTree, pbit int, key Key, val Value) (int, error) {
 		return 0, err
 	}
 	if b < 0 {
-		if err := n.unhash(t); err != nil {
+		if err := n.unhash(t, pbit); err != nil {
 			return 0, err
 		}
 	}

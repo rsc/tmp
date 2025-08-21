@@ -102,14 +102,6 @@ func (f *testFile) Sync() error {
 	return nil
 }
 
-func (tt *tester) setTree(tree *diskTree) {
-	tt.tree = tree
-	if tt.valid == nil {
-		tt.valid = make(map[string]bool)
-	}
-	tt.markOK()
-}
-
 func (tt *tester) markOK() {
 	h := tt.tree.memHash()
 	tt.t.Logf("ok %v", h)
@@ -126,31 +118,6 @@ func (tt *tester) try(f *testFile) {
 	if tt.tree == nil {
 		// Initial tree not created yet.
 		return
-	}
-
-	// Test file truncated to last sync.
-	whole := f.data
-	f.data = whole[:f.sync]
-	tt.reopen("truncated to last sync at %#x", f.sync)
-
-	// Test file truncated past the sync point.
-	if n := len(whole) - f.sync; n >= 2 {
-		for range 5 {
-			pos := f.sync + 1 + rand.N(n-1)
-			f.data = whole[:pos]
-			tt.reopen("truncated to %#x", pos)
-		}
-	}
-
-	// Test file with correct length but corrupt data past the sync point.
-	f.data = whole
-	if len(f.data) > f.sync {
-		for range 5 {
-			pos := f.sync + rand.N(len(f.data)-f.sync)
-			f.data[pos] ^= 1
-			tt.reopen("corrupted at %#x", pos)
-			f.data[pos] ^= 1
-		}
 	}
 
 	// Test file with write actually succeeding.
@@ -187,26 +154,21 @@ func TestDiskRecovery(t *testing.T) {
 }
 
 func testDiskRecovery(t *testing.T) {
-	oldPatch := maxPatch
-	oldTree := maxTree
-	defer func() {
-		maxPatch = oldPatch
-		maxTree = oldTree
-	}()
-
-	maxPatch = 256 + 7 + 32
-	maxTree = 1 << 30
-
 	tt := &tester{t: t}
 	for i := range tt.file {
 		tt.file[i].tester = tt
 	}
 
-	tree, err := New(&tt.file[0], &tt.file[1])
+	xtree, err := New(&tt.file[0], &tt.file[1])
 	if err != nil {
 		t.Fatal(err)
 	}
-	tt.setTree(tree.(*diskTree))
+	tree := xtree.(*diskTree)
+
+	tree.pmem.SetConstantFlushing(true)
+	tt.tree = tree
+	tt.valid = make(map[string]bool)
+	tt.markOK()
 
 	for range 10 {
 		switch rand.N(10) {

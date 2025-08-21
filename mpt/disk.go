@@ -10,48 +10,16 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"os"
 	"runtime"
 
 	"rsc.io/tmp/mpt/internal/pmem"
-	"rsc.io/tmp/mpt/internal/slicemath"
 )
 
-// On-Disk Tree
+// Tree Format
 //
-// The layout of the disk representation is:
-//
-//	treeID   [16]
-//	treeSeq  [8]
-//	treeLen  [8]
-//	treeMem  [treeLen]
-//	checksum [32]
-//	patch blocks
-//
-// The checksum is a SHA256 of the data from treeID through treeMem.
-//
-// Each patch block is
-//
-//	treeID	 [16]
-//	treeSeq	 [8]
-//	patchLen [8]
-//	patchMem [patchLen]
-//	checksum [32]
-//
-// The patchMem layout is a sequence of mutations:
-//
-//	offset [6]
-//	len    [1]
-//	data   [len]
-//
-// Note that the initial tree and each patch block have the same framing,
-// but they differ in the content: the initial tree is the actual memory,
-// while each patch block contains a sequence of mutations to that memory
-// (or extending that memory).
-//
-// The actual tree memory starts with a header:
+// The tree memory starts with a header:
 //
 //	epoch [8]
 //	dirty [1]
@@ -97,20 +65,6 @@ const (
 
 	// address size
 	addrSize = 6
-
-	// framing before memory image or patch block
-	frameID    = 0
-	frameSeq   = 16
-	frameLen   = 24
-	frameSize  = 32
-	frameExtra = frameSize + 32
-)
-
-var (
-	// maximum patch and tree length.
-	// Variables so that testing can override.
-	maxPatch int = 1 << 20
-	maxTree  int = 16 << 40
 )
 
 // File is the interface needed for on-disk storage.
@@ -148,27 +102,6 @@ func (t *diskTree) broken(err error) error {
 	return err
 }
 
-// A diskCompact holds the state for an in-progress compaction.
-type diskCompact struct {
-	hash hash.Hash
-	off  int
-	end  int
-}
-
-// A diskReader is an on-disk input file.
-type diskReader struct {
-	file io.ReaderAt
-	seq  uint64 // tree sequence number
-	off  int64  // read offset in file
-}
-
-// A diskWriter is an on-disk output file.
-type diskWriter struct {
-	file File
-	seq  uint64 // tree sequence number
-	off  int64  // write offset in file
-}
-
 // Create creates a new, empty on-disk [Tree] stored in the two named files.
 // The files must not already exist, unless they are both os.DevNull,
 // in which case the Tree is held only in memory.
@@ -193,7 +126,7 @@ func open(file1, file2 string, mode int, op string) (Tree, error) {
 		return nil, err
 	}
 
-	return diskOpen(f1, f2, op)
+	return memOpen(f1, f2, op)
 }
 
 // New creates or opens an on-disk [Tree] in the given files.
@@ -211,7 +144,7 @@ func New(file1, file2 File) (Tree, error) {
 	} else {
 		op = "open"
 	}
-	return diskOpen(file1, file2, op)
+	return memOpen(file1, file2, op)
 }
 
 func setActive(f File, b bool) {
@@ -220,13 +153,13 @@ func setActive(f File, b bool) {
 	}
 }
 
-// diskOpen is the general implementation of open.
+// memOpen is the general implementation of open.
 // op is "create", "open", or "new", indicating the operation
 // being performed on the files; sync indicates whether to
 // try to use the files' Sync method.
 // (When using /dev/null for an in-memory tree,
 // we avoid calling Sync, because it will fail.)
-func diskOpen(file1, file2 File, op string) (_ Tree, err error) {
+func memOpen(file1, file2 File, op string) (_ Tree, err error) {
 	pmemOp := pmem.Open
 	if op == "create" {
 		pmemOp = pmem.Create
@@ -316,10 +249,7 @@ func (t *diskTree) UnsafeUnmap() error {
 	return t.pmem.UnsafeUnmap()
 }
 
-// TODO: this whole memory file logic could be separated out into its own package
-// separate from the merkle patricia tree.
-
-// TODO: mutate could be done by editing dst in place and then calling t.mutated(dst).
+// TODO: should mutate be done by editing dst in place and then calling t.mutated(dst)?
 
 // mutate is like copy(dst, src) where dst is inside t.mem.
 // It also records the mutation in the patch buffer, to be written
@@ -343,7 +273,7 @@ func (t *diskTree) addrToMem(a addr, n int) ([]byte, error) {
 // memToAddr converts a byte slice p, which must be from t.mem,
 // into an addr.
 func (t *diskTree) memToAddr(p []byte) addr {
-	off, ok := slicemath.Offset(t.mem, p)
+	off, ok := t.pmem.Offset(p)
 	if !ok {
 		panic("mpt: memToAddr misuse")
 	}

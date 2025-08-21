@@ -22,8 +22,10 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"log"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"rsc.io/tmp/mpt/internal/slicemath"
 	"rsc.io/tmp/mpt/internal/span"
@@ -167,6 +169,8 @@ type Mem struct {
 	closed    bool
 	compact   compact
 
+	constantFlushing bool
+
 	syncHook   func()
 	mutateHook func()
 }
@@ -293,17 +297,36 @@ func (m *Mem) writeEmptyTree(w *writer) error {
 	return m.sync(w)
 }
 
+// SetConstantFlushing sets whether the memory should write every
+// mutation to the files as quickly as possible. The setting defaults to false,
+// in which case mutations are written to the files only when enough mutations
+// have accumulated to fill a patch block or when Sync is called.
+// Enabling constant flushing instead writes a separate patch block for
+// every individual mutation outside a group, and for each group.
+// This is an inefficient use of both file space and I/O bandwidth,
+// but it can be useful for testing purposes to explore the full set of
+// possible intermediate memory images that might be observed
+// after a crash.
+func (m *Mem) SetConstantFlushing(on bool) {
+	m.constantFlushing = on
+	if on {
+		m.flushPatch(false)
+	}
+}
+
 func (w *writer) write(b []byte) error {
-	if _, err := w.file.WriteAt(b, w.off); err != nil {
+	if err := w.writeAt(b, w.off); err != nil {
 		return err
 	}
 	w.off += int64(len(b))
-	w.wrote = true
 	return nil
 }
 
 func (w *writer) writeAt(b []byte, off int64) error {
-	if _, err := w.file.WriteAt(b, off); err != nil {
+	start := time.Now()
+	_, err := w.file.WriteAt(b, off)
+	log.Printf("write %d %.6fs\n", len(b), time.Since(start).Seconds())
+	if err != nil {
 		return err
 	}
 	w.wrote = true
@@ -528,9 +551,6 @@ func (m *Mem) Data() []byte {
 // Expand extends the length of the current memory
 // to be at least n bytes and returns the extended slice.
 func (m *Mem) Expand(n int) ([]byte, error) {
-	if n > 0x10000 {
-		panic("EXPAND")
-	}
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -540,6 +560,8 @@ func (m *Mem) Expand(n int) ([]byte, error) {
 	mem, err := m.span.Expand(n)
 	if err != nil {
 		// Do not use m.broken - nothing is broken yet.
+		// Caller might recover gracefully from being unable
+		// to expand the memory.
 		return nil, err
 	}
 	m.mem = mem
@@ -636,6 +658,11 @@ func (m *Mem) mutate(off int, dst, src []byte) error {
 	if m.mutateHook != nil && m.group < 0 {
 		m.mutateHook()
 	}
+	if m.group < 0 && m.constantFlushing {
+		if err := m.flushPatch(true); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -699,7 +726,7 @@ func (m *Mem) EndGroup() error {
 	m.group = -1
 
 	if m.next.seq > 0 && m.compact.off == m.compact.end && len(m.patch) > 0 {
-		//m.flushPatch(false)
+		m.flushPatch(false)
 	}
 	return nil
 }
@@ -749,6 +776,7 @@ func (m *Mem) writeFrame(w *writer, data []byte) error {
 // maybeCompact runs a bit of compaction if needed,
 // limiting I/O to writing at most n data bytes plus some framing.
 func (m *Mem) maybeCompact(n int) error {
+	//println("MAYBE", m.next.seq, m.current.off, 2*int64(len(m.mem)))
 	if m.next.seq == 0 && m.current.off < 2*int64(len(m.mem)) {
 		// Current disk file is less than twice the tree memory.
 		// Not worth compacting yem.
@@ -757,6 +785,7 @@ func (m *Mem) maybeCompact(n int) error {
 
 	c := &m.compact
 	if m.next.seq == 0 {
+		log.Print("compact start")
 		// Start a new compaction.
 		// Record current tree size (but not content),
 		// so we know where patches should be written.
@@ -833,6 +862,7 @@ func (m *Mem) maybeCompact(n int) error {
 		return err
 	}
 
+	log.Print("compact switch")
 	// Switch current and next.
 	m.current, m.next = m.next, m.current
 	setCurrent(m.current.file, true, int(m.current.off))
@@ -888,7 +918,10 @@ func (m *Mem) Sync() error {
 
 func (m *Mem) sync(w *writer) error {
 	if w.wrote {
-		if err := w.file.Sync(); err != nil {
+		start := time.Now()
+		err := w.file.Sync()
+		log.Printf("sync %.6fs\n", time.Since(start).Seconds())
+		if err != nil {
 			return m.broken(err)
 		}
 		w.wrote = false
