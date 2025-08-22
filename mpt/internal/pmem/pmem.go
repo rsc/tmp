@@ -31,6 +31,8 @@ import (
 	"rsc.io/tmp/mpt/internal/span"
 )
 
+const verboseIO = false
+
 // File Layout
 //
 //	magic [multiple of 8 bytes]
@@ -325,7 +327,9 @@ func (w *writer) write(b []byte) error {
 func (w *writer) writeAt(b []byte, off int64) error {
 	start := time.Now()
 	_, err := w.file.WriteAt(b, off)
-	log.Printf("write %d %.6fs\n", len(b), time.Since(start).Seconds())
+	if verboseIO {
+		log.Printf("write %d %.6fs\n", len(b), time.Since(start).Seconds())
+	}
 	if err != nil {
 		return err
 	}
@@ -785,7 +789,9 @@ func (m *Mem) maybeCompact(n int) error {
 
 	c := &m.compact
 	if m.next.seq == 0 {
-		log.Print("compact start")
+		if verboseIO {
+			log.Print("compact start")
+		}
 		// Start a new compaction.
 		// Record current tree size (but not content),
 		// so we know where patches should be written.
@@ -862,7 +868,9 @@ func (m *Mem) maybeCompact(n int) error {
 		return err
 	}
 
-	log.Print("compact switch")
+	if verboseIO {
+		log.Print("compact switch")
+	}
 	// Switch current and next.
 	m.current, m.next = m.next, m.current
 	setCurrent(m.current.file, true, int(m.current.off))
@@ -920,7 +928,9 @@ func (m *Mem) sync(w *writer) error {
 	if w.wrote {
 		start := time.Now()
 		err := w.file.Sync()
-		log.Printf("sync %.6fs\n", time.Since(start).Seconds())
+		if verboseIO {
+			log.Printf("sync %.6fs\n", time.Since(start).Seconds())
+		}
 		if err != nil {
 			return m.broken(err)
 		}
