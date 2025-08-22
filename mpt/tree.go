@@ -29,6 +29,9 @@ type Tree interface {
 	// Snap is a mutating operation and must not be called
 	// concurrently with any other Tree method calls
 	// (including other calls to Snap).
+	//
+	// As a special case, if version is negative, Snap does not
+	// set the version.
 	Snap(version int64) (Snapshot, error)
 
 	// Prove looks up key in the tree and returns a proof
@@ -48,11 +51,21 @@ type Tree interface {
 	// the underlying files and then calls the files' Sync methods
 	// to flush the changes to disk. (If the files are *os.File files,
 	// Sync calls fsync(2).)
+	//
+	// Even in the absence of calls to Sync, a Tree provides the
+	// guarantee that on recovery from a crash, the state of the
+	// tree matches some moment between calls to Set and Snap.
+	// That is, there is some last operation on the Tree that was
+	// stored and reloaded, and all earlier operations are reflected
+	// in the tree and no later operations are reflected.
+	// A client can call Snap(-1) to find the stored tree's version V
+	// and, assuming the client assigns version numbers in order,
+	// will know that the state of the tree corresponds to just before
+	// or after some Set call between Snap(V) and Snap(V+1).
 	Sync() error
 
-	// TODO explain
+	// Close calls Sync and then closes the underlying files.
 	Close() error
-	UnsafeUnmap() error
 }
 
 // ErrModifiedTree indicates that Prove was called after a Set without a Snap.

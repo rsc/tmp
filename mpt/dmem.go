@@ -65,6 +65,9 @@ func (n *diskNode) rehash(t *diskTree, pbit int, force bool) (Hash, error) {
 
 // Snap returns a snapshot of t.
 func (t *diskTree) Snap(version int64) (Snapshot, error) {
+	t.mmu.RLock()
+	defer t.mmu.RUnlock()
+
 	if err := t.snap(version); err != nil {
 		return Snapshot{}, err
 	}
@@ -96,14 +99,19 @@ func (t *diskTree) snap(version int64) error {
 			return err
 		}
 	}
-	if err := t.hdr().setVersion(t, version); err != nil {
-		return err
+	if version >= 0 {
+		if err := t.hdr().setVersion(t, version); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 // Set sets the value associated with key to val.
 func (t *diskTree) Set(key Key, val Value) error {
+	t.mmu.RLock()
+	defer t.mmu.RUnlock()
+
 	if t.err != nil {
 		return t.err
 	}
@@ -210,6 +218,9 @@ func (t *diskTree) setChild(nbit int, childp addr, key Key, val Value) (int, err
 
 // Prove returns a proof of the presence or absence of key in t.
 func (t *diskTree) Prove(key Key) (Proof, error) {
+	t.mmu.RLock()
+	defer t.mmu.RUnlock()
+
 	if t.err != nil {
 		return nil, t.err
 	}

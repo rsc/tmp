@@ -97,7 +97,9 @@ func (t *memTree) Snap(version int64) (Snapshot, error) {
 		// nothing, but keep the read for causing races with Set
 	}
 	t.dirty = false
-	t.version = version
+	if version >= 0 {
+		t.version = version
+	}
 	if t.root != nil {
 		t.hash = t.root.rehash(-1)
 		// t.check()

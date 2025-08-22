@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"sync"
 
 	"rsc.io/tmp/mpt/internal/pmem"
 )
@@ -82,8 +83,15 @@ var _ pmem.File = File(nil)
 
 // A diskTree is an on-disk [Tree].
 type diskTree struct {
-	pmem   *pmem.Mem
-	mem    []byte // cache of pmem.Data()
+	// mmu is the memory mapping mutex.
+	// All methods except Close do mmu.RLock and mmu.RUnlock
+	// in order to be allowed to use pmem.Data() aka mem.
+	// Close calls mmu.Lock/mmu.Unlock to wait for all other
+	// method calls to finish before unmapping the memory.
+	mmu  sync.RWMutex
+	pmem *pmem.Mem
+	mem  []byte // cache of pmem.Data()
+
 	file1  File
 	file2  File
 	closed bool
@@ -206,6 +214,9 @@ var errCorrupt = errors.New("corrupt tree data")
 
 // Sync syncs written data to disk.
 func (t *diskTree) Sync() error {
+	t.mmu.RLock()
+	defer t.mmu.RUnlock()
+
 	if t.err != nil {
 		return t.err
 	}
@@ -219,8 +230,11 @@ func (t *diskTree) Sync() error {
 
 // Close closes the tree and the files it uses.
 func (t *diskTree) Close() error {
-	if err := t.Sync(); err != nil {
-		t.broken(err)
+	t.mmu.Lock()
+	defer t.mmu.Unlock()
+
+	if err := t.pmem.Sync(); err != nil {
+		return t.broken(err)
 	}
 	if t.closed {
 		return fmt.Errorf("tree already closed")
@@ -228,6 +242,11 @@ func (t *diskTree) Close() error {
 	if err := t.pmem.Release(); err != nil {
 		t.broken(err)
 	}
+	if err := t.pmem.UnsafeUnmap(); err != nil {
+		t.broken(err)
+	}
+	t.mem = nil
+	t.pmem = nil
 	if err := t.file1.Close(); err != nil {
 		t.broken(err)
 	}
@@ -240,13 +259,6 @@ func (t *diskTree) Close() error {
 	t.closed = true
 	t.err = errors.New("tree is closed") // stop future method calls
 	return nil
-}
-
-func (t *diskTree) UnsafeUnmap() error {
-	if !t.closed {
-		return fmt.Errorf("UnsafeUnmap without Close")
-	}
-	return t.pmem.UnsafeUnmap()
 }
 
 // TODO: should mutate be done by editing dst in place and then calling t.mutated(dst)?

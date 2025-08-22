@@ -85,7 +85,6 @@ func TestGoldenTrees(t *testing.T) {
 		for i, tree := range goldenTrees {
 			t.Run(fmt.Sprint(i), func(t *testing.T) {
 				tt := newTree(t)
-				defer tt.tree.UnsafeUnmap()
 				defer tt.tree.Close()
 				e := int64(1)
 				if len(tree.keys) == 0 {
@@ -160,7 +159,6 @@ func TestAllTrees(t *testing.T) {
 						}
 					}
 					tt.tree.Close()
-					tt.tree.UnsafeUnmap()
 				}
 			})
 		}
