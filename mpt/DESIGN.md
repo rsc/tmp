@@ -111,10 +111,10 @@ For more about standard Patricia trees, see TODO REFERENCE.
 
 Cominbing the Merkle and Patricia pieces, a Merkle Patricia Tree provides the following operations:
 
- - Set(key, val, epoch): add a new key-value pair to the map, updating the map's epoch.
- - Snap(): return the tree root's key prefix and hash.
+ - Set(key, val): add a new key-value pair to the map.
+ - Snap(version): set the tree's version and return the tree root's key prefix and hash.
  - Prove(key): return a proof of the result of looking up a given key in the current snapshot. A separate library function `Verify` verifies a proof and returns the lookup result (whether the key was found and, if so, its associated value).
- - Sync: flush recent changes to disk.
+ - Sync(): flush recent changes to disk.
 
 The recursive hash of an MPT is defined as follows:
 
@@ -145,7 +145,7 @@ that version first.
 It may also be useful read and understand that implementation
 before proceeding to the disk implementation.
 
-TODO link to other MPT implementations and point out where they're not MPTs?
+TODO: link to other MPT implementations and contrast with this one?
 
 ## Storage Overview {#storage}
 
@@ -193,7 +193,7 @@ that will be written to disk.
 
 The tree memory starts with a header with the form:
 
-	epoch    [ 8 bytes]
+	version  [ 8 bytes]
 	dirty    [ 1 byte]
 	pad      [ 1 byte]
 	root     [ 6 bytes]
@@ -203,7 +203,7 @@ The tree memory starts with a header with the form:
 All numbers are stored in big-endian order
 for legibility when reading hex dumps.
 
- - “epoch” is a number for clients to use to match the
+ - “version” is a number for clients to use to match the
    tree contents to a position in the underlying transparent log.
  - “root” is a pointer to the tree's root node,
    represented as a 48-bit byte offset within the
@@ -284,13 +284,10 @@ garbage collector's pacing with one extremely large allocation.
 The file format allows grouping memory updates into atomic units,
 so that partially applied updates are never observed
 when loading a tree from disk.
-(TODO: make that true)
-
-TODO: allow setting the epoch on each Set?
 
 ## File Format {#format}
 
-A file consists of the magic string `"mpttree\n"`
+A file consists of the magic string `"mpt tree\n\x00\x00\x00\x00\x00\x00\x00"`
 followed by a sequence of variable-length frames.
 Each frame has the form:
 
@@ -323,8 +320,8 @@ a valid tree.
 The second and subsequent frames in the file each hold
 a patch block, which holds one or more mutations of the form:
 
-	offset   [6 bytes]
-	N        [1 byte]
+	offset   [varint]
+	N        [varint]
 	data     [N bytes]
 
 That mutation says to write `data` of length `N` at
@@ -414,7 +411,43 @@ The improvement is possible because we keep all the data in memory at all times.
 
 ## Speed {#speed}
 
-TODO
+On my circa-2023 home server with 128 GB of RAM
+and an NVMe disk using LVM encryption, storing 834 million hashes
+takes about 250 minutes, or about 55,000 Set operations per second.
+This is with constant disk compaction, and I suspect something in my
+kernel stack of slowing disk I/O.
 
+A “lazy hash” optimization that delays recomputing all inner node hashes
+is delayed until the Sync operation can avoid spending time
+computing hashes that will be overwritten by a subsequent Set,
+but it dramatically increases the latency of Sync.
+More important than not computing the hashes is not writing
+them to disk, especially for the somewhat special case of writing all new entries
+when populating a new tree.
+In that case, the lazy hash's lower disk usage
+also avoids any compaction: only new data is
+being written, so the disk file never reaches twice the memory size.
+In that case, the 834 million hashes can be written in 45 minutes,
+followed by a 7 minute sync, or about 260,000 Set operations second.
 
+A limited lazy hash that is lazy only up to a fixed number of
+Set operations may be the best of both worlds.
 
+Prove operations run in microseconds.
+
+Snap is effectively free.
+
+## Recovery {#recovery}
+
+On crash and restart, the persistent disk implementation guarantees
+to have a state equivalent to some prefix of the operations that had
+been executed prior to the crash. That is, some recent operations may
+have been lost, but if operation K is observed, then all operations
+prior to K will also be observed.
+
+If the client calls Snap with a version number at regular intervals,
+then after a crash, if the tree loads with version V, it means that
+all of the Set calls before Snap(V) has been retained, and some of the Set
+calls between Snap(V) and Snap(V+1) may also have been retained.
+It suffices to replay all the Set operations between Snap(V) and Snap(V+1)
+and then Snap(V+1) to get a consistent tree.

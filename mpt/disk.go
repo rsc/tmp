@@ -21,7 +21,7 @@ import (
 //
 // The tree memory starts with a header:
 //
-//	epoch [8]
+//	version [8]
 //	dirty [1]
 //	pad [1]
 //	root [6]
@@ -44,12 +44,12 @@ import (
 
 const (
 	// header offsets
-	hdrEpoch = 0
-	hdrDirty = 8
-	hdrRoot  = 10
-	hdrHash  = 16
-	hdrNodes = 48
-	hdrSize  = 56
+	hdrVersion = 0
+	hdrDirty   = 8
+	hdrRoot    = 10
+	hdrHash    = 16
+	hdrNodes   = 48
+	hdrSize    = 56
 
 	// node offsets
 	// setFields knows that key, val, bits are contiguous.
@@ -313,16 +313,16 @@ func putAddr(p []byte, a addr) {
 // A diskHdr is the memory copy of the tree header.
 type diskHdr [hdrSize]byte
 
-func (h *diskHdr) epoch() int64 { return int64(binary.BigEndian.Uint64(h[hdrEpoch:])) }
-func (h *diskHdr) dirty() bool  { return h[hdrDirty] != 0 }
-func (h *diskHdr) root() addr   { return parseAddr(h[hdrRoot:]) }
-func (h *diskHdr) hash() Hash   { return Hash(h[hdrHash:]) }
-func (h *diskHdr) nodes() int   { return int(binary.BigEndian.Uint64(h[hdrNodes:])) }
+func (h *diskHdr) version() int64 { return int64(binary.BigEndian.Uint64(h[hdrVersion:])) }
+func (h *diskHdr) dirty() bool    { return h[hdrDirty] != 0 }
+func (h *diskHdr) root() addr     { return parseAddr(h[hdrRoot:]) }
+func (h *diskHdr) hash() Hash     { return Hash(h[hdrHash:]) }
+func (h *diskHdr) nodes() int     { return int(binary.BigEndian.Uint64(h[hdrNodes:])) }
 
-func (h *diskHdr) setEpoch(t *diskTree, epoch int64) error {
+func (h *diskHdr) setVersion(t *diskTree, version int64) error {
 	var buf [8]byte
-	binary.BigEndian.PutUint64(buf[:], uint64(epoch))
-	return t.mutate(h[hdrEpoch:], buf[:])
+	binary.BigEndian.PutUint64(buf[:], uint64(version))
+	return t.mutate(h[hdrVersion:], buf[:])
 }
 
 func (h *diskHdr) setDirty(t *diskTree, d bool) error {

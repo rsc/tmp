@@ -64,42 +64,39 @@ func (n *diskNode) rehash(t *diskTree, pbit int, force bool) (Hash, error) {
 }
 
 // Snap returns a snapshot of t.
-func (t *diskTree) Snap() (Snapshot, error) {
-	if err := t.snap(); err != nil {
+func (t *diskTree) Snap(version int64) (Snapshot, error) {
+	if err := t.snap(version); err != nil {
 		return Snapshot{}, err
 	}
 	// t.check()
-	return Snapshot{t.hdr().epoch(), t.hdr().hash()}, nil
+	return Snapshot{t.hdr().version(), t.hdr().hash()}, nil
 }
 
-func (t *diskTree) snap() error {
+func (t *diskTree) snap(version int64) error {
 	if t.err != nil {
 		return t.err
 	}
-	if !t.hdr().dirty() {
-		return nil
+	if t.hdr().dirty() {
+		// Note: Not using a mutation group because we might be
+		// updating arbitrarily many hashes during rehash.
+		// Without group, ordering matters: write hash before dirty
+		// and both before version.
+		root, err := t.node(t.hdr().root())
+		if err != nil {
+			return err
+		}
+		hash, err := root.rehash(t, -1, false)
+		if err != nil {
+			return err
+		}
+		if err := t.hdr().setHash(t, hash); err != nil {
+			return err
+		}
+		if err := t.hdr().setDirty(t, false); err != nil {
+			return err
+		}
 	}
-
-	// Note: Not using a mutation group because we might be
-	// updating arbitrarily many hashes during rehash.
-	// Without group, ordering matters: write hash before dirty
-	// and both before epoch.
-
-	root, err := t.node(t.hdr().root())
-	if err != nil {
-		return err
-	}
-	hash, err := root.rehash(t, -1, false)
-	if err != nil {
-		return err
-	}
-	if err := t.hdr().setHash(t, hash); err != nil {
-		return err
-	}
-	if err := t.hdr().setDirty(t, false); err != nil {
-		return err
-	}
-	if err := t.hdr().setEpoch(t, t.hdr().epoch()+1); err != nil {
+	if err := t.hdr().setVersion(t, version); err != nil {
 		return err
 	}
 	return nil

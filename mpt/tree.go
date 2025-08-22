@@ -24,21 +24,12 @@ type Tree interface {
 	// (including other calls to Set).
 	Set(key Key, val Value) error
 
-	// Snap returns the current tree snapshot.
-	//
-	// If the tree has been modified (using [Tree.Set]) since the
-	// previous call to Snap, then Snap returns a fresh snapshot
-	// with an epoch that is one greater than the previous snapshot.
-	//
-	// If no records have been added since the previous call to Snap,
-	// then Snap returns the same result as the previous call.
+	// Snap sets the tree's version number and returns the current tree snapshot.
 	//
 	// Snap is a mutating operation and must not be called
 	// concurrently with any other Tree method calls
 	// (including other calls to Snap).
-	//
-	// TODO: Perhaps Snap should take the epoch as an input.
-	Snap() (Snapshot, error)
+	Snap(version int64) (Snapshot, error)
 
 	// Prove looks up key in the tree and returns a proof
 	// either of key's value or that key is not present.
@@ -47,10 +38,19 @@ type Tree interface {
 	// Prove is a read-only operation and can be called
 	// concurrently with other calls to Prove, but not other
 	// calls to Set or Snap.
+	//
+	// It is an error to call Prove if Set has been called without
+	// a subsequent call to Snap: in that case, the caller does not
+	// know what the root hash is, so the proof will be unverifiable.
 	Prove(key Key) (Proof, error)
 
-	// TODO explain
+	// Sync flushes all changes from past Set and Snap calls to
+	// the underlying files and then calls the files' Sync methods
+	// to flush the changes to disk. (If the files are *os.File files,
+	// Sync calls fsync(2).)
 	Sync() error
+
+	// TODO explain
 	Close() error
 	UnsafeUnmap() error
 }
@@ -105,8 +105,8 @@ func (v Value) String() string {
 //
 // The snapshot hash is a cryptographic hash of the entire tree content.
 type Snapshot struct {
-	Epoch int64
-	Hash  Hash
+	Version int64
+	Hash    Hash
 }
 
 // A Hash is a Merkle hash of a node.

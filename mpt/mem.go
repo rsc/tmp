@@ -11,12 +11,12 @@ import (
 
 // A memTree is an in-memory [Tree].
 type memTree struct {
-	epoch int64    // epoch (version number) of tree
-	root  *memNode // root node
-	hash  Hash     // overall tree hash
-	dirty bool     // Set called without Snap
-	nodes int      // number of nodes in tree
-	err   error    // sticky error condition
+	version int64    // version number of tree
+	root    *memNode // root node
+	hash    Hash     // overall tree hash
+	dirty   bool     // Set called without Snap
+	nodes   int      // number of nodes in tree
+	err     error    // sticky error condition
 }
 
 // A memNode is a single node in the in-memory tree.
@@ -89,19 +89,20 @@ func (t *memTree) Close() error {
 func (t *memTree) UnsafeUnmap() error { return nil }
 
 // Snap returns a snapshot of t.
-func (t *memTree) Snap() (Snapshot, error) {
+func (t *memTree) Snap(version int64) (Snapshot, error) {
 	if t.err != nil {
 		return Snapshot{}, t.err
 	}
 	if t.dirty {
-		t.epoch++
+		// nothing, but keep the read for causing races with Set
 	}
 	t.dirty = false
+	t.version = version
 	if t.root != nil {
 		t.hash = t.root.rehash(-1)
 		// t.check()
 	}
-	return Snapshot{t.epoch, t.hash}, nil
+	return Snapshot{t.version, t.hash}, nil
 }
 
 // Set sets the value associated with key to val.

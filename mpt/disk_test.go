@@ -169,6 +169,7 @@ func testDiskRecovery(t *testing.T) {
 	tt.tree = tree
 	tt.valid = make(map[string]bool)
 	tt.markOK()
+	version := int64(0)
 
 	for range 10 {
 		switch rand.N(10) {
@@ -182,7 +183,8 @@ func testDiskRecovery(t *testing.T) {
 
 		case 0:
 			t.Log("snap")
-			_, err := tree.Snap()
+			version++
+			_, err := tree.Snap(version)
 			check(t, err)
 			tt.markOK()
 			tt.test()
@@ -216,7 +218,7 @@ func TestDiskReopen(t *testing.T) {
 		check(t, tree1.Set(Key(v(i)), v(i)))
 	}
 
-	_, err = tree1.Snap()
+	_, err = tree1.Snap(1)
 	check(t, err)
 	check(t, tree1.Sync())
 

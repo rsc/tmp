@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"runtime/debug"
 	"strings"
 	"testing"
 )
@@ -250,17 +251,17 @@ func (tt *testTree) set(key Key, val Value) {
 	fmt.Fprintf(&tt.log, "set(%v, %v)\n", key, val)
 }
 
-func (tt *testTree) snap(epoch int64, hash Hash) {
+func (tt *testTree) snap(version int64, hash Hash) {
 	tt.t.Helper()
-	snap, err := tt.tree.Snap()
+	snap, err := tt.tree.Snap(version)
 	if err != nil {
 		tt.t.Fatalf("Tree.Snap: %v\n\nLog:\n%s", err, &tt.log)
 	}
-	if snap.Epoch != epoch || snap.Hash != hash {
+	if snap.Version != version || snap.Hash != hash {
 		tt.t.Fatalf("Tree.Snap = %d, %v, want %d, %v\n\nLog:\n%s",
-			snap.Epoch, snap.Hash, epoch, hash, &tt.log)
+			snap.Version, snap.Hash, version, hash, &tt.log)
 	}
-	fmt.Fprintf(&tt.log, "snap() = %d, %v\n", epoch, hash)
+	fmt.Fprintf(&tt.log, "snap(%d) = %v\n", version, hash)
 }
 
 func (tt *testTree) get(key Key, val Value, ok bool) {
@@ -268,11 +269,11 @@ func (tt *testTree) get(key Key, val Value, ok bool) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			tt.t.Fatalf("panic: %v\n\nLog:\n%s", r, &tt.log)
+			tt.t.Fatalf("panic: %v\n\nLog:\n%s\n%s", r, &tt.log, debug.Stack())
 		}
 	}()
 
-	snap, err := tt.tree.Snap()
+	snap, err := tt.tree.Snap(1)
 	if err != nil {
 		tt.t.Fatalf("Tree.Snap: %v\n\nLog:\n%s", err, &tt.log)
 	}
@@ -317,7 +318,7 @@ func benchmarkSet(b *testing.B, tree Tree, n, treeSize int) {
 	for i := range treeSize {
 		tree.Set(sha("old", v(i)), v(i))
 	}
-	tree.Snap()
+	tree.Snap(1)
 
 	b.ReportAllocs()
 	for b.Loop() {
@@ -325,7 +326,7 @@ func benchmarkSet(b *testing.B, tree Tree, n, treeSize int) {
 		for _, kv := range todo {
 			tree.Set(Key(kv[0]), Value(kv[1]))
 		}
-		tree.Snap()
+		tree.Snap(2)
 	}
 }
 
@@ -348,7 +349,7 @@ func benchmarkProof(b *testing.B, tree Tree, treeSize int) {
 	for i := range treeSize {
 		tree.Set(sha("old", v(i)), v(i))
 	}
-	tree.Snap()
+	tree.Snap(1)
 	key := sha("old", v(0))
 
 	b.ReportAllocs()
