@@ -11,10 +11,10 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
-	"io/ioutil"
 	"math"
 	"math/big"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/golang/freetype"
@@ -124,7 +124,7 @@ func Handler(w http.ResponseWriter, req *http.Request) {
 		modestr = "retry loop"
 	}
 
-	data, err := ioutil.ReadFile("/tmp/luxisr.ttf")
+	data, err := os.ReadFile("/tmp/luxisr.ttf")
 	if err != nil {
 		panic(err)
 	}

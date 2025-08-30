@@ -7,7 +7,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"strconv"
@@ -52,7 +52,7 @@ func parseHexdump(text string) ([]byte, error) {
 }
 
 func main() {
-	hex, err := ioutil.ReadAll(os.Stdin)
+	hex, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		log.Fatal(err)
 	}
