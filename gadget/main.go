@@ -32,18 +32,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math/big"
-	"math/rand/v2"
 	"net/http"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"time"
 
 	"google.golang.org/genai"
-	"rsc.io/tmp/gadget/internal/envfile"
-	"rsc.io/tmp/gadget/internal/schema"
 )
 
 var (
@@ -65,6 +60,9 @@ var (
 	flagMaxOutput   = flag.Int("maxoutput", -1, "set output limit to `N` tokens (≤ 0 is unlimited)")
 	flagSeed        = flag.Int("seed", -1, "use random seed `N`")
 	flagRot13       = flag.Bool("rot13", false, "enable local rot13 tool")
+	flagReadFile       = flag.Bool("readfile", false, "enable readfile tool")
+	flagWriteFile       = flag.Bool("writefile", false, "enable writefile tool")
+	flagShell = flag.Bool("shell", false, "enable shell tool")
 	flagAttach      = flag.String("a", "", "attach `file` to request")
 	flagJSON        = flag.Bool("json", false, "print JSON traces of all messages")
 )
@@ -138,7 +136,11 @@ func main() {
 		// Tools []*Tool `json:"tools,omitempty"`
 
 		// // Optional. Associates model output to a specific function call.
-		// ToolConfig *ToolConfig `json:"toolConfig,omitempty"`
+		ToolConfig: &genai.ToolConfig{
+			FunctionCallingConfig: &genai.FunctionCallingConfig{
+				Mode: genai.FunctionCallingConfigModeValidated,
+			},
+		},
 	}
 	if *flagSeed >= 0 {
 		config.Seed = ptr(int32(*flagSeed))
@@ -188,7 +190,20 @@ func main() {
 		config.Tools = append(config.Tools, &genai.Tool{URLContext: &genai.URLContext{}})
 	}
 	if *flagRot13 {
-		config.Tools = append(config.Tools, rot13Tool)
+		registerRot13()
+	}
+	if *flagReadFile || *flagWriteFile {
+		registerReadFile()
+	}
+	if *flagWriteFile {
+		registerWriteFile()
+	}
+	if *flagShell {
+		registerShell()
+	}
+	config.Tools = append(config.Tools, tools...)
+	if len(config.Tools) == 0 {
+		config.ToolConfig = nil
 	}
 
 	logJSON(lf, "config", config)
@@ -259,33 +274,17 @@ Reading:
 				fmt.Printf("%s\n%s\n", code.Outcome, code.Output)
 			}
 			if fn := p.FunctionCall; fn != nil {
-				var args rot13Args
-				if err := schema.Unmarshal(fn.Args, &args, "args"); err != nil {
-					panic(err)
+				tfn, ok := toolFuncs[fn.Name]
+				if !ok {
+					script = append(script, fnCallError(lf, fn, err))
+				} else {
+					reply, err := tfn(ctx, fn.Args)
+					if err != nil {
+						script = append(script, fnCallError(lf, fn, err))
+					} else {
+						script = append(script, fnCallResp(lf, fn, reply))
+					}
 				}
-				reply, err := rot13(ctx, &args)
-				if err != nil {
-					panic(err)
-				}
-				js, err := schema.Marshal(reply, "reply")
-				if err != nil {
-					panic(err)
-				}
-				resp := &genai.Content{
-					Role: "user",
-					Parts: []*genai.Part{
-						{
-							FunctionResponse: &genai.FunctionResponse{
-								ID:       fn.ID,
-								Name:     fn.Name,
-								Response: map[string]any{"output": js},
-							},
-						},
-					},
-				}
-				debugPrint(resp)
-				logJSON(lf, "script", resp)
-				script = append(script, resp)
 				responded = true
 			}
 			if p.Text != "" {
@@ -332,76 +331,27 @@ func debugPrint(x any) {
 	fmt.Fprintf(os.Stderr, "%s\n", response)
 }
 
-type rot13Args struct {
-	Text string `tool:"text to be translated"`
+func fnCallError(lf *os.File, fn *genai.FunctionCall, err error) *genai.Content {
+	return fnCallJS(lf, fn, map[string]any{"error": err.Error()})
 }
 
-type rot13Reply struct {
-	Grkg string `tool:"rot13 of input text"`
+func fnCallResp(lf *os.File, fn *genai.FunctionCall, reply any) *genai.Content {
+	return fnCallJS(lf, fn, map[string]any{"output": reply})
 }
 
-func rot13(ctx context.Context, in *rot13Args) (*rot13Reply, error) {
-	out := []byte(in.Text)
-	for i, b := range out {
-		if 'A' <= b && b <= 'M' || 'a' <= b && b <= 'm' {
-			out[i] = b + 13
-		} else if 'N' <= b && b <= 'Z' || 'n' <= b && b <= 'z' {
-			out[i] = b - 13
-		}
+func fnCallJS(lf *os.File, fn *genai.FunctionCall, m map[string]any) *genai.Content {
+	resp := &genai.Content{
+		Role: "user",
+		Parts: []*genai.Part{
+			{
+				FunctionResponse: &genai.FunctionResponse{
+					ID: fn.ID,
+					Name: fn.Name,
+					Response: m,
+				},
+			},
+		},
 	}
-	return &rot13Reply{Grkg: string(out)}, nil
-}
-
-func mustType[T any]() *genai.Schema {
-	t, err := schema.Type(reflect.TypeFor[T]())
-	if err != nil {
-		panic(err)
-	}
-	return t
-}
-
-var rot13Tool = &genai.Tool{
-	FunctionDeclarations: []*genai.FunctionDeclaration{{
-		Name:        "rot13",
-		Description: "applies rot13 encoding to text",
-		Parameters:  mustType[*rot13Args](),
-		Response:    mustType[*rot13Reply](),
-	}},
-}
-
-func logFile() *os.File {
-	dir := filepath.Join(home, ".gadget/log")
-	if _, err := os.Stat(dir); err != nil {
-		if err := os.MkdirAll(dir, 0700); err != nil {
-			log.Fatal(err)
-		}
-	}
-	file := time.Now().UTC().Format("2006-01-02-150405")
-	id := big.NewInt(int64(rand.Int64())).Text(36)
-	for len(id) < 10 {
-		id = "0" + id
-	}
-	file += "-" + id[:7]
-
-	f, err := os.Create(filepath.Join(dir, file))
-	if err != nil {
-		log.Fatal(err)
-	}
-	return f
-}
-
-func logJSON(f *os.File, verb string, arg any) {
-	line := []byte(verb)
-	if arg != nil {
-		js, err := json.Marshal(arg)
-		if err != nil {
-			log.Fatal(err)
-		}
-		line = append(line, ' ')
-		line = append(line, js...)
-	}
-	line = append(line, '\n')
-	if _, err := f.Write(line); err != nil {
-		log.Fatal(err)
-	}
+	logJSON(lf, "fnreply", resp)
+	return resp
 }
