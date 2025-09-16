@@ -12,8 +12,6 @@ import (
 func now() int64
 
 func main() {
-	now()
-	now()
 	hw := now()
 	sw := time.Now()
 	for range 10 {
