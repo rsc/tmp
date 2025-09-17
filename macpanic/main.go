@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -53,7 +52,7 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	data, err := ioutil.ReadFile(*kernel)
+	data, err := os.ReadFile(*kernel)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -117,7 +116,7 @@ func nm(file string) ([]sym, error) {
 }
 
 func process(file string) {
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		log.Print(err)
 		return
