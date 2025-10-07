@@ -3,6 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // TODO test constant flushing mode
+// TODO test recovery of disk writes
 
 package pmem
 
@@ -40,7 +41,7 @@ func testRecovery(t *testing.T) {
 		tt.file[i].tester = tt
 	}
 
-	mem, err := Create("magic", &tt.file[0], &tt.file[1])
+	mem, err := Create("magic", &tt.file[0], &tt.file[1], nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +262,7 @@ func (tt *tester) try(f *testFile) {
 
 func (tt *tester) reopen(format string, args ...any) {
 	kind := fmt.Sprintf(format, args...)
-	mem, err := Open("magic", tt.file[0].clone(), tt.file[1].clone())
+	mem, err := Open("magic", tt.file[0].clone(), tt.file[1].clone(), nil)
 	if err != nil {
 		tt.t.Fatalf("reopen: %s: %v\n\n%s", kind, err, hex.Dump(tt.file[0].data))
 	}

@@ -164,6 +164,8 @@ type Mem struct {
 	patched   int // length of “patched” section of memory
 	current   *writer
 	next      *writer
+	disk      File  // disk-only (not in memory) storage
+	diskOff   int64 // offset where user writes begin
 	patch     []byte
 	group     int // group start in patch, or -1 if not in group
 	groupData int // total group data
@@ -220,7 +222,8 @@ func (m *Mem) broken(err error) error {
 	return err
 }
 
-// Create initializes a new memory stored in the file pair.
+// Create initializes a new memory stored in mem1, mem2,
+// with disk-only storage in disk if non-nil.
 //
 // The magic string is recorded at the start of the file to
 // distinguish different uses of persistent memory files.
@@ -229,8 +232,8 @@ func (m *Mem) broken(err error) error {
 //
 // Create does not check that the files are empty, in order
 // to support using pre-allocated disk files or raw disk partitions.
-func Create(magic string, file1, file2 File) (*Mem, error) {
-	return create(magic, file1, file2)
+func Create(magic string, mem1, mem2, disk File) (*Mem, error) {
+	return create(magic, mem1, mem2, disk)
 }
 
 // newMem allocates a new Mem for use by Create and Open.
@@ -263,7 +266,7 @@ func newMem(magic string) (*Mem, error) {
 }
 
 // create implements Create but avoids exposing named results in the docs.
-func create(magic string, file1, file2 File) (_ *Mem, err error) {
+func create(magic string, file1, file2, disk File) (_ *Mem, err error) {
 	m, err := newMem(magic)
 	if err != nil {
 		return nil, err
@@ -280,11 +283,20 @@ func create(magic string, file1, file2 File) (_ *Mem, err error) {
 	m.current.seq = 1
 	m.next.file = file2
 	m.next.seq = 0
+
 	if err := m.writeEmptyTree(m.current); err != nil {
 		return nil, err
 	}
 	if err := m.writeEmptyTree(m.next); err != nil {
 		return nil, err
+	}
+	if disk != nil {
+		w := &writer{file: disk}
+		if err := m.writeEmptyTree(w); err != nil {
+			return nil, err
+		}
+		m.disk = disk
+		m.diskOff = w.off
 	}
 	return m, nil
 }
@@ -337,15 +349,16 @@ func (w *writer) writeAt(b []byte, off int64) error {
 	return nil
 }
 
-// Open opens the memory stored in the file pair.
+// Open opens the memory stored in the file pair mem1, mem2,
+// with disk-only storage in disk if non-nil.
 // The magic string must match the one used when the
 // file pair was created with [Create].
-func Open(magic string, file1, file2 File) (*Mem, error) {
-	return open(magic, file1, file2)
+func Open(magic string, mem1, mem2, disk File) (*Mem, error) {
+	return open(magic, mem1, mem2, disk)
 }
 
 // open implements Open but avoids exposing named results in the docs.
-func open(magic string, file1, file2 File) (_ *Mem, err error) {
+func open(magic string, file1, file2, disk File) (_ *Mem, err error) {
 	m, err := newMem(magic)
 	if err != nil {
 		return nil, err
@@ -374,6 +387,17 @@ func open(magic string, file1, file2 File) (_ *Mem, err error) {
 	}
 	if r1.seq < r2.seq {
 		r1, r2 = r2, r1
+	}
+	if disk != nil {
+		rd, err := m.readStart(disk)
+		if err != nil {
+			return nil, err
+		}
+		if rd.id != r1.id {
+			return nil, fmt.Errorf("inconsistent pmem files: disk ID does not match mem ID")
+		}
+		m.disk = disk
+		m.diskOff = rd.off
 	}
 	if err := m.readFile(r1); err != nil {
 		return nil, err
@@ -527,18 +551,28 @@ func (m *Mem) replay(patch []byte) error {
 		}
 		patch = patch[n:]
 		//fmt.Printf("AT %#x+%#x\n", off, count)
-		if count > uint64(len(patch)) || off+count < off || int(off+count) < 0 {
+		if count > uint64(len(patch)) || off+count < off || int(off>>1+count) < 0 {
 			return m.broken(errCorrupt)
 		}
-		if off+count > uint64(len(m.mem)) {
-			mem, err := m.span.Expand(int(off + count))
-			if err != nil {
+		if off&1 != 0 {
+			// disk patch
+			off >>= 1
+			if _, err := m.disk.WriteAt(patch, int64(off)); err != nil {
 				return m.broken(err)
 			}
-			m.mem = mem
+		} else {
+			// memory patch
+			off >>= 1
+			if off+count > uint64(len(m.mem)) {
+				mem, err := m.span.Expand(int(off + count))
+				if err != nil {
+					return m.broken(err)
+				}
+				m.mem = mem
+			}
+			copy(m.mem[off:off+count], patch)
+			m.patched = max(m.patched, int(off+count))
 		}
-		copy(m.mem[off:off+count], patch)
-		m.patched = max(m.patched, int(off+count))
 		patch = patch[count:]
 	}
 	return nil
@@ -628,10 +662,55 @@ func (m *Mem) Mutate(dst, src []byte) error {
 	if !ok {
 		return fmt.Errorf("invalid dst for mutation")
 	}
-	return m.mutate(off, dst, src)
+	return m.mutate(uint64(off)<<1, src, func() error {
+		copy(dst, src)
+		m.patched = max(m.patched, off+len(src))
+		return nil
+	})
 }
 
-func (m *Mem) mutate(off int, dst, src []byte) error {
+// WriteDisk writes src to the disk-only file at offset off.
+// It guarantees that on recovery after a crash,
+// all disk writes that occurred before the latest recovered Mutate
+// will be available for reading.
+// (Disk writes that happened after that Mutate may or may not
+// be available for reading as well.)
+func (m *Mem) WriteDisk(src []byte, off int64) error {
+	if m.err != nil {
+		return m.err
+	}
+	if len(src) == 0 {
+		return nil
+	}
+	return m.mutate(uint64(off)<<1|1, src, func() error {
+		_, err := m.disk.WriteAt(src, m.diskOff+off)
+		return m.broken(err)
+	})
+}
+
+// ReadDisk reads into dst from the disk-only file at offset off.
+func (m *Mem) ReadDisk(dst []byte, off int64) error {
+	if m.err != nil {
+		return m.err
+	}
+	_, err := m.disk.ReadAt(dst, m.diskOff+off)
+	if err != nil {
+		if err == io.EOF {
+			err = io.ErrUnexpectedEOF
+		}
+		return m.broken(err)
+	}
+	return nil
+}
+
+// mutate logs a write to the patch block, starting a new patch block if necessary.
+// It calls commit to apply the actual write once it has checked a few
+// error conditions.
+//
+// The offset off is the one recorded in the patch block.
+// For mutations of the memory at offset o, off should be o<<1.
+// For mutations of the disk-only file at offset o, off should be o<<1|1.
+func (m *Mem) mutate(off uint64, src []byte, commit func() error) error {
 	// Note: it is tempting to return early if bytes.Equal(dst, src) is true,
 	// but there are two problems with that. One is that some callers
 	// may modify dst in place and then call m.Mutate(dst, dst).
@@ -644,9 +723,9 @@ func (m *Mem) mutate(off int, dst, src []byte) error {
 		}
 	}
 	p := m.ptmp[:0]
-	//fmt.Printf("PATCH @%d %#x+%#x\n", len(m.patch), off, len(dst))
-	p = binary.AppendUvarint(p, uint64(off))
-	p = binary.AppendUvarint(p, uint64(len(dst)))
+	//fmt.Printf("PATCH @%d %#x+%#x\n", len(m.patch), off, len(src))
+	p = binary.AppendUvarint(p, off)
+	p = binary.AppendUvarint(p, uint64(len(src)))
 	if len(m.patch)+len(p)+len(src)+maxVarint+1 > maxPatch {
 		if err := m.flushPatch(true); err != nil {
 			return err
@@ -654,11 +733,14 @@ func (m *Mem) mutate(off int, dst, src []byte) error {
 	}
 	m.patch = append(m.patch, p...)
 	m.patch = append(m.patch, src...)
-	copy(dst, src)
 	if m.group >= 0 {
 		m.groupData += len(src)
 	}
-	m.patched = max(m.patched, off+len(src))
+	if commit != nil {
+		if err := commit(); err != nil {
+			return err
+		}
+	}
 	if m.mutateHook != nil && m.group < 0 {
 		m.mutateHook()
 	}
@@ -724,7 +806,7 @@ func (m *Mem) EndGroup() error {
 		// Before closing group, append an empty mutation if an Expand happened.
 		// Not using m.addMemLenPatch because we need to preserve the invariant
 		// that there will be room for _another_ when the eventual flush happens.
-		m.mutate(len(m.mem), nil, nil)
+		m.mutate(uint64(len(m.mem))<<1, nil, nil)
 		m.patched = len(m.mem)
 	}
 	m.group = -1
@@ -745,7 +827,7 @@ func (m *Mem) addMemLenPatch() error {
 	if len(m.patch)+maxVarint+1 > maxPatch {
 		return m.broken(fmt.Errorf("pmem internal patch overflow"))
 	}
-	m.patch = binary.AppendUvarint(m.patch, uint64(len(m.mem)))
+	m.patch = binary.AppendUvarint(m.patch, uint64(len(m.mem))<<1)
 	m.patch = binary.AppendUvarint(m.patch, 0)
 	m.patched = len(m.mem)
 	return nil
