@@ -49,8 +49,7 @@ const (
 	hdrDirty   = 8
 	hdrRoot    = 10
 	hdrHash    = 16
-	hdrNodes   = 48
-	hdrSize    = 56
+	hdrSize    = 48
 
 	// node offsets
 	// setFields knows that key, val, bits are contiguous.
@@ -329,7 +328,6 @@ func (h *diskHdr) version() int64 { return int64(binary.BigEndian.Uint64(h[hdrVe
 func (h *diskHdr) dirty() bool    { return h[hdrDirty] != 0 }
 func (h *diskHdr) root() addr     { return parseAddr(h[hdrRoot:]) }
 func (h *diskHdr) hash() Hash     { return Hash(h[hdrHash:]) }
-func (h *diskHdr) nodes() int     { return int(binary.BigEndian.Uint64(h[hdrNodes:])) }
 
 func (h *diskHdr) setVersion(t *diskTree, version int64) error {
 	var buf [8]byte
@@ -354,12 +352,6 @@ func (h *diskHdr) setRoot(t *diskTree, n *diskNode) error {
 
 func (h *diskHdr) setHash(t *diskTree, hash Hash) error {
 	return t.mutate(h[hdrHash:], hash[:])
-}
-
-func (h *diskHdr) setNodes(t *diskTree, n int) error {
-	var buf [8]byte
-	binary.BigEndian.PutUint64(buf[:], uint64(n))
-	return t.mutate(h[hdrNodes:], buf[:])
 }
 
 // hdr returns a pointer to the in-memory tree header.
