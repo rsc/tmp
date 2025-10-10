@@ -230,7 +230,7 @@ func (*devNull) Close() error { return nil }
 func (*devNull) Sync() error  { return nil }
 
 func newDiskTree() Tree {
-	t, err := New(DevNull(), DevNull())
+	t, err := New(DevNull(), DevNull(), new(memFile))
 	if err != nil {
 		panic(err)
 	}

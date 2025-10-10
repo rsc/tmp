@@ -12,6 +12,7 @@ import (
 // A memTree is an in-memory [Tree].
 type memTree struct {
 	version int64    // version number of tree
+	exact   bool     // version is exact
 	root    *memNode // root node
 	hash    Hash     // overall tree hash
 	dirty   bool     // Set called without Snap
@@ -40,7 +41,8 @@ func (n *memNode) bit() int {
 // NewMemTree returns a new in-memory [Tree].
 func NewMemTree() Tree {
 	t := &memTree{
-		hash: emptyTreeHash(),
+		hash:  emptyTreeHash(),
+		exact: true,
 	}
 	return t
 }
@@ -88,6 +90,11 @@ func (t *memTree) Close() error {
 
 func (t *memTree) UnsafeUnmap() error { return nil }
 
+// Stat returns the tree metadata.
+func (t *memTree) Version() (version int64, exact bool) {
+	return t.version, t.exact
+}
+
 // Snap returns a snapshot of t.
 func (t *memTree) Snap(version int64) (Snapshot, error) {
 	if t.err != nil {
@@ -104,6 +111,7 @@ func (t *memTree) Snap(version int64) (Snapshot, error) {
 		t.hash = t.root.rehash(-1)
 		// t.check()
 	}
+	t.exact = true
 	return Snapshot{t.version, t.hash}, nil
 }
 
@@ -113,6 +121,7 @@ func (t *memTree) Set(key Key, val Value) error {
 		return t.err
 	}
 	t.dirty = true
+	t.exact = false
 	if t.root == nil {
 		t.root = &memNode{key: key, val: val}
 	} else {

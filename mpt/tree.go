@@ -53,16 +53,22 @@ type Tree interface {
 	// Sync calls fsync(2).)
 	//
 	// Even in the absence of calls to Sync, a Tree provides the
-	// guarantee that on recovery from a crash, the state of the
-	// tree matches some moment between calls to Set and Snap.
-	// That is, there is some last operation on the Tree that was
-	// stored and reloaded, and all earlier operations are reflected
-	// in the tree and no later operations are reflected.
-	// A client can call Snap(-1) to find the stored tree's version V
-	// and, assuming the client assigns version numbers in order,
-	// will know that the state of the tree corresponds to just before
-	// or after some Set call between Snap(V) and Snap(V+1).
+	// guarantee that on recovery from a crash, it can identify the
+	// latest snapshot whose Set calls are fully included in the tree.
+	// A client can call Version() to find the stored tree's version V
+	// and a boolean indicating whether any later Set calls may also
+	// be reflected in the tree. When a recovered version is inexact,
+	// some Set calls made after that version may be present and
+	// others may not be, no matter the order in which the Set calls were made.
 	Sync() error
+
+	// Version returns the version number of the tree's last complete snapshot.
+	// All Set calls made prior to Snap(version) are guaranteed to be
+	// recorded in the tree. However, if exact is false, then the tree may
+	// include the effect of Set calls made after that snapshot.
+	// In that case, to bring the tree into a consistent state, the client is
+	// expected to replay all Set calls up to the next version.
+	Version() (version int64, exact bool)
 
 	// Close calls Sync and then closes the underlying files.
 	Close() error

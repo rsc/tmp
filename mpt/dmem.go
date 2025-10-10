@@ -8,11 +8,15 @@ import "fmt"
 
 // hash returns the hash for the given tree node.
 // pbit is the parent bit depth, controlling whether n is viewed as a leaf.
-func (n *diskNode) hash(pbit int) Hash {
+func (n *diskNode) hash(t *diskTree, pbit int) (Hash, error) {
 	if n.bit() <= pbit {
-		return hashLeaf(n.key(), n.val())
+		key, val, err := n.keyVal(t)
+		if err != nil {
+			return Hash{}, err
+		}
+		return hashLeaf(key, val), nil
 	}
-	return n.ihash()
+	return n.ihash(), nil
 }
 
 var lazyHash = false
@@ -34,7 +38,7 @@ func (n *diskNode) unhash(t *diskTree, pbit int) error {
 func (n *diskNode) rehash(t *diskTree, pbit int, force bool) (Hash, error) {
 	nbit := n.bit()
 	if nbit <= pbit {
-		return hashLeaf(n.key(), n.val()), nil
+		return n.hash(t, pbit)
 	}
 	if n.dirty() || force {
 		left, err := t.node(n.left())
@@ -107,6 +111,12 @@ func (t *diskTree) snap(version int64) error {
 	return nil
 }
 
+// Version returns version information about the tree.
+func (t *diskTree) Version() (version int64, exact bool) {
+	hdr := t.hdr()
+	return hdr.version(), hdr.exact()
+}
+
 // Set sets the value associated with key to val.
 func (t *diskTree) Set(key Key, val Value) error {
 	t.mmu.RLock()
@@ -114,6 +124,18 @@ func (t *diskTree) Set(key Key, val Value) error {
 
 	if t.err != nil {
 		return t.err
+	}
+
+	if t.hdr().exact() {
+		// Clear exact and flush to disk (in the memory files)
+		// before we make any writes to the disk leaf file,
+		// so that we know the disk leaf file may be ahead of the memory file.
+		if err := t.hdr().setExact(t, false); err != nil {
+			return err
+		}
+		if err := t.pmem.Sync(); err != nil {
+			return err
+		}
 	}
 
 	// Keep all writes for this Set in the same group.
@@ -160,7 +182,11 @@ func (n *diskNode) set(t *diskTree, pbit int, key Key, val Value) (int, error) {
 	nbit := n.bit()
 	if nbit <= pbit {
 		// view n as leaf
-		b := n.key().overlap(key)
+		nkey, _, err := n.keyVal(t)
+		if err != nil {
+			return 0, err
+		}
+		b := nkey.overlap(key)
 		if b == keyBits {
 			if err := n.setVal(t, val); err != nil {
 				return 0, err
@@ -241,14 +267,16 @@ func (n *diskNode) prove(t *diskTree, pbit int, key Key) (Proof, error) {
 	nbit := n.bit()
 	if nbit <= pbit {
 		// view n as leaf
+		nkey, nval, err := n.keyVal(t)
+		if err != nil {
+			return nil, err
+		}
 		var p Proof
-		nkey := n.key()
 		if nkey == key {
 			p = Proof(proofConfirm)
 		} else {
 			p = append(Proof(proofDeny), nkey[:]...)
 		}
-		nval := n.val()
 		return append(p, nval[:]...), nil
 	}
 
@@ -264,7 +292,10 @@ func (n *diskNode) prove(t *diskTree, pbit int, key Key) (Proof, error) {
 	if err != nil {
 		return nil, err
 	}
-	sibHash := sib.hash(nbit)
+	sibHash, err := sib.hash(t, nbit)
+	if err != nil {
+		return nil, err
+	}
 
 	p, err := child.prove(t, nbit, key)
 	if err != nil {
@@ -303,8 +334,12 @@ func (n *diskNode) check(t *diskTree, depth, pbit int, sawNil *bool) Hash {
 	}
 	if n.bit() <= pbit {
 		// view as leaf
-		fmt.Printf("%*sleaf(%d) %#x %v %v %#x %#x %v dirty=%v\n", depth*2, "", n.bit(), t.addr(n), n.key(), n.val(), n.left(), n.right(), hashLeaf(n.key(), n.val()), n.dirty())
-		return hashLeaf(n.key(), n.val())
+		nkey, nval, err := n.keyVal(t)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("%*sleaf(%d) %#x %v %v %#x %#x %v dirty=%v\n", depth*2, "", n.bit(), t.addr(n), nkey, nval, n.left(), n.right(), hashLeaf(nkey, nval), n.dirty())
+		return hashLeaf(nkey, nval)
 	}
 	fmt.Printf("%*s%d %#x %#x %#x %v dirty=%v\n", depth*2, "", n.bit(), t.addr(n), n.left(), n.right(), n.ihash(), n.dirty())
 

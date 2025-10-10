@@ -5,8 +5,6 @@
 package mpt
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -47,24 +45,27 @@ const (
 	// header offsets
 	hdrVersion = 0
 	hdrDirty   = 8
+	hdrExact   = 9
 	hdrRoot    = 10
 	hdrHash    = 16
 	hdrSize    = 48
 
 	// node offsets
-	// setFields knows that key, val, bits are contiguous.
 	// setLeftRight knows that left and right are contiguous.
-	nodeKey   = 0
-	nodeVal   = 32
-	nodeUbit  = 64
-	nodeDirty = 65
-	nodeLeft  = 68
-	nodeRight = 74
-	nodeIHash = 80
-	nodeSize  = 112
+	nodeUbit  = 0
+	nodeDirty = 1
+	nodeLeft  = 4
+	nodeRight = 10
+	nodeIHash = 16
+	nodeSize  = 48
 
 	// address size
 	addrSize = 6
+
+	// leaf file details
+	leafMagic   = "mpt leaf\n\x00\x00\x00\x00\x00\x00\x00"
+	leafHdrSize = 16
+	leafSize    = 64
 )
 
 // File is the interface needed for on-disk storage.
@@ -93,6 +94,7 @@ type diskTree struct {
 
 	file1  File
 	file2  File
+	leaf   File
 	closed bool
 	err    error // sticky error
 }
@@ -112,17 +114,17 @@ func (t *diskTree) broken(err error) error {
 // Create creates a new, empty on-disk [Tree] stored in the two named files.
 // The files must not already exist, unless they are both os.DevNull,
 // in which case the Tree is held only in memory.
-func Create(file1, file2 string) (Tree, error) {
-	return open(file1, file2, os.O_WRONLY|os.O_CREATE|os.O_EXCL, "create")
+func Create(file1, file2, disk string) (Tree, error) {
+	return open(file1, file2, disk, os.O_WRONLY|os.O_CREATE|os.O_EXCL, "create")
 }
 
 // Open opens an on-disk [Tree] stored in the two named files.
 // The files must have been created by a previous call to [Create].
-func Open(file1, file2 string) (Tree, error) {
-	return open(file1, file2, os.O_RDWR, "open")
+func Open(file1, file2, disk string) (Tree, error) {
+	return open(file1, file2, disk, os.O_RDWR, "open")
 }
 
-func open(file1, file2 string, mode int, op string) (Tree, error) {
+func open(file1, file2, file3 string, mode int, op string) (Tree, error) {
 	f1, err := os.OpenFile(file1, mode, 0666)
 	if err != nil {
 		return nil, err
@@ -132,8 +134,16 @@ func open(file1, file2 string, mode int, op string) (Tree, error) {
 		f1.Close()
 		return nil, err
 	}
-
-	return memOpen(f1, f2, op)
+	if op == "create" {
+		mode = os.O_RDWR | os.O_CREATE | os.O_EXCL
+	}
+	f3, err := os.OpenFile(file3, mode, 0666)
+	if err != nil {
+		f1.Close()
+		f2.Close()
+		return nil, err
+	}
+	return memOpen(f1, f2, f3, op)
 }
 
 // New creates or opens an on-disk [Tree] in the given files.
@@ -141,7 +151,7 @@ func open(file1, file2 string, mode int, op string) (Tree, error) {
 // Otherwise, New opens a pre-existing tree stored in those files.
 // Only one file contains the latest tree at a time, but the
 // implementation alternates between files to implement atomic updates.
-func New(file1, file2 File) (Tree, error) {
+func New(file1, file2, file3 File) (Tree, error) {
 	var op string
 	var buf [1]byte
 	n1, err1 := file1.ReadAt(buf[:], 0)
@@ -151,7 +161,7 @@ func New(file1, file2 File) (Tree, error) {
 	} else {
 		op = "open"
 	}
-	return memOpen(file1, file2, op)
+	return memOpen(file1, file2, file3, op)
 }
 
 func setActive(f File, b bool) {
@@ -166,12 +176,12 @@ func setActive(f File, b bool) {
 // try to use the files' Sync method.
 // (When using /dev/null for an in-memory tree,
 // we avoid calling Sync, because it will fail.)
-func memOpen(file1, file2 File, op string) (_ Tree, err error) {
+func memOpen(file1, file2, disk File, op string) (_ Tree, err error) {
 	pmemOp := pmem.Open
 	if op == "create" {
 		pmemOp = pmem.Create
 	}
-	mem, err := pmemOp("mpt tree\n", file1, file2)
+	mem, err := pmemOp("mpt tree\n", file1, file2, disk)
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +189,7 @@ func memOpen(file1, file2 File, op string) (_ Tree, err error) {
 		pmem:  mem,
 		file1: file1,
 		file2: file2,
+		leaf:  disk,
 	}
 	defer func() {
 		if err != nil {
@@ -219,6 +230,11 @@ func (t *diskTree) Sync() error {
 	if t.err != nil {
 		return t.err
 	}
+	if !t.hdr().dirty() && !t.hdr().exact() {
+		if err := t.hdr().setExact(t, true); err != nil {
+			return err
+		}
+	}
 	if err := t.pmem.Sync(); err != nil {
 		return t.broken(err)
 	}
@@ -232,11 +248,11 @@ func (t *diskTree) Close() error {
 	t.mmu.Lock()
 	defer t.mmu.Unlock()
 
-	if err := t.pmem.Sync(); err != nil {
-		return t.broken(err)
-	}
 	if t.closed {
 		return fmt.Errorf("tree already closed")
+	}
+	if err := t.pmem.Sync(); err != nil {
+		return t.broken(err)
 	}
 	if err := t.pmem.Release(); err != nil {
 		t.broken(err)
@@ -326,6 +342,7 @@ type diskHdr [hdrSize]byte
 
 func (h *diskHdr) version() int64 { return int64(binary.BigEndian.Uint64(h[hdrVersion:])) }
 func (h *diskHdr) dirty() bool    { return h[hdrDirty] != 0 }
+func (h *diskHdr) exact() bool    { return h[hdrExact] != 0 }
 func (h *diskHdr) root() addr     { return parseAddr(h[hdrRoot:]) }
 func (h *diskHdr) hash() Hash     { return Hash(h[hdrHash:]) }
 
@@ -341,6 +358,14 @@ func (h *diskHdr) setDirty(t *diskTree, d bool) error {
 		buf[0] = 1
 	}
 	return t.mutate(h[hdrDirty:], buf[:])
+}
+
+func (h *diskHdr) setExact(t *diskTree, d bool) error {
+	var buf [1]byte
+	if d {
+		buf[0] = 1
+	}
+	return t.mutate(h[hdrExact:], buf[:])
 }
 
 func (h *diskHdr) setRoot(t *diskTree, n *diskNode) error {
@@ -419,8 +444,18 @@ func (t *diskTree) newNode() (*diskNode, error) {
 	return (*diskNode)(n), nil
 }
 
-func (n *diskNode) key() Key    { return Key(n[nodeKey:]) }
-func (n *diskNode) val() Value  { return Value(n[nodeVal:]) }
+func (n *diskNode) leafAddr(t *diskTree) int64 {
+	return int64(leafSize * ((t.addr(n) - hdrSize) / nodeSize))
+}
+
+func (n *diskNode) keyVal(t *diskTree) (Key, Value, error) {
+	var kv [leafSize]byte
+	if err := t.pmem.ReadDisk(kv[:], n.leafAddr(t)); err != nil {
+		return Key{}, Value{}, err
+	}
+	return Key(kv[:]), Value(kv[len(Key{}):]), nil
+}
+
 func (n *diskNode) dirty() bool { return n[nodeDirty] != 0 }
 func (n *diskNode) left() addr  { return parseAddr(n[nodeLeft:]) }
 func (n *diskNode) right() addr { return parseAddr(n[nodeRight:]) }
@@ -440,27 +475,36 @@ func (n *diskNode) bit() int {
 // it also sets dirty=true and clears ihash.
 func (n *diskNode) init(t *diskTree, key Key, val Value, bit int, left, right *diskNode) error {
 	var buf [nodeSize]byte
-	copy(buf[nodeKey:], key[:])
-	copy(buf[nodeVal:], val[:])
 	buf[nodeUbit] = byte(bit)
 	buf[nodeDirty] = 1
 	putAddr(buf[nodeLeft:], t.addr(left))
 	putAddr(buf[nodeRight:], t.addr(right))
-	return t.mutate(n[:], buf[:])
+	if err := t.mutate(n[:], buf[:]); err != nil {
+		return err
+	}
+
+	var kv [leafSize]byte
+	copy(kv[:], key[:])
+	copy(kv[len(Key{}):], val[:])
+	if err := t.pmem.WriteDisk(kv[:], n.leafAddr(t)); err != nil {
+		return t.broken(err)
+	}
+	return nil
 }
 
-func (n *diskNode) setVal(t *diskTree, val Value) error { return t.mutate(n[nodeVal:], val[:]) }
-func (n *diskNode) setIHash(t *diskTree, h Hash) error  { return t.mutate(n[nodeIHash:], h[:]) }
+func (n *diskNode) setVal(t *diskTree, val Value) error {
+	off := n.leafAddr(t) + int64(len(Key{}))
+	if err := t.pmem.WriteDisk(val[:], off); err != nil {
+		return t.broken(err)
+	}
+	return nil
+}
+
+func (n *diskNode) setIHash(t *diskTree, h Hash) error { return t.mutate(n[nodeIHash:], h[:]) }
 func (n *diskNode) setDirty(t *diskTree, d bool) error {
 	var p [1]byte
 	if d {
 		p[0] = 1
 	}
 	return t.mutate(n[nodeDirty:], p[:])
-}
-
-func (t *diskTree) memHash() string {
-	h := sha256.Sum256(t.mem)
-	s := base64.StdEncoding.EncodeToString(h[:])
-	return fmt.Sprintf("%s/%#x", s[:7], len(t.mem))
 }

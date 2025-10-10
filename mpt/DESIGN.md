@@ -60,6 +60,11 @@ The inevitable conclusion is that we must keep the entire tree in memory,
 streaming updates to disk in batches.
 So we will do exactly that.
 
+A hybrid approach is also possible, where each lookup or set requires O(1) disk I/O operations
+in exchange for not keeping leaf data in memory.
+This reduces the memory overhead from 112 bytes per entry to 48 bytes per entry.
+After describing the fully in-memory version, we describe the hybrid version.
+
 ## Merkle Patricia Tree Overview {#mpt}
 
 An MPT starts with the concept of a binary tree of depth 256, where the key-value
@@ -451,3 +456,42 @@ all of the Set calls before Snap(V) has been retained, and some of the Set
 calls between Snap(V) and Snap(V+1) may also have been retained.
 It suffices to replay all the Set operations between Snap(V) and Snap(V+1)
 and then Snap(V+1) to get a consistent tree.
+
+## Hybrid Approach
+
+The approach described so far is the original in-memory approach.
+It is tagged as mpt v0.1.0.
+
+This section describes a hybrid approach implemented in later versions.
+The hybrid approach trades a constant number of disk I/O per Set or Prove
+operation for reduced memory requirements. In the hybrid approach, the
+leaf nodes (meaning the key and value fields) are all stored in a “leaf file”
+not stored in memory. Writes to the leaf file are still recorded in patch blocks,
+so that after recovery the leaf file is always at least as up to date as the main
+tree memory image. However, writes to the leaf file also happen immediately,
+so after recovery, the leaf file may also contain writes beyond those reflected
+in the main tree memory image. Having a leaf file that is “too new” cannot
+affect the structure of the overall tree, since keys are never changed after a
+node is allocated. However, the leaf file being too new can mean that values
+that are “too new” are recorded for leaf nodes, so the client must recover by
+replaying all the Set operations that may have happened after the point
+where the memory image was recovered. Once those are replayed, the
+memory image and the leaf file will be in sync.
+
+To support the recovery operation, there is a new method Tree.Version:
+
+	// Version returns the version number of the tree's last complete snapshot.
+	// All Set calls made prior to Snap(version) are guaranteed to be
+	// recorded in the tree. However, if exact is false, then the tree may
+	// include the effect of Set calls made after that snapshot.
+	// In that case, to bring the tree into a consistent state, the client is
+	// expected to replay all Set calls up to the next version.
+	Version() (version int64, exact bool)
+
+In this new approach, calling Prove requires two disk I/Os: one to read the
+leaf key and value at the end of the lookup, and one to read that node's sibling
+for inclusion in the proof. Calling set requires three disk I/Os: the same two reads
+needed by Prove as well as one write to update or create a leaf.
+
+In exchange for these two or three disk I/Os per operation, the memory
+requirements are reduced from 112 bytes per record to 48 bytes per record.

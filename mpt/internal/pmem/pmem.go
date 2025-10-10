@@ -255,14 +255,16 @@ func newMem(magic string) (*Mem, error) {
 		compact: compact{
 			hash: sha256.New(),
 		},
-		current: &writer{
-			hash: sha256.New(),
-		},
-		next: &writer{
-			hash: sha256.New(),
-		},
 	}
 	return m, nil
+}
+
+func newWriter(file File, seq uint64) *writer {
+	return &writer{
+		file: file,
+		hash: sha256.New(),
+		seq:  seq,
+	}
 }
 
 // create implements Create but avoids exposing named results in the docs.
@@ -279,10 +281,8 @@ func create(magic string, file1, file2, disk File) (_ *Mem, err error) {
 	}()
 
 	rand.Read(m.id[:])
-	m.current.file = file1
-	m.current.seq = 1
-	m.next.file = file2
-	m.next.seq = 0
+	m.current = newWriter(file1, 1)
+	m.next = newWriter(file2, 0)
 
 	if err := m.writeEmptyTree(m.current); err != nil {
 		return nil, err
@@ -291,7 +291,7 @@ func create(magic string, file1, file2, disk File) (_ *Mem, err error) {
 		return nil, err
 	}
 	if disk != nil {
-		w := &writer{file: disk}
+		w := newWriter(disk, 0)
 		if err := m.writeEmptyTree(w); err != nil {
 			return nil, err
 		}
@@ -397,15 +397,14 @@ func open(magic string, file1, file2, disk File) (_ *Mem, err error) {
 			return nil, fmt.Errorf("inconsistent pmem files: disk ID does not match mem ID")
 		}
 		m.disk = disk
-		m.diskOff = rd.off
+		m.diskOff = rd.off + hashSize
 	}
 	if err := m.readFile(r1); err != nil {
 		return nil, err
 	}
-	m.current.file = r1.file
-	m.current.seq = r1.seq
+	m.current = newWriter(r1.file, r1.seq)
 	m.current.off = r1.off
-	m.next.file = r2.file
+	m.next = newWriter(r2.file, 0)
 	return m, nil
 }
 
@@ -544,6 +543,8 @@ func (m *Mem) replay(patch []byte) error {
 		if n <= 0 {
 			return m.broken(errCorrupt)
 		}
+		isDisk := off&1 != 0
+		off >>= 1
 		patch = patch[n:]
 		count, n := binary.Uvarint(patch)
 		if n <= 0 {
@@ -551,18 +552,16 @@ func (m *Mem) replay(patch []byte) error {
 		}
 		patch = patch[n:]
 		//fmt.Printf("AT %#x+%#x\n", off, count)
-		if count > uint64(len(patch)) || off+count < off || int(off>>1+count) < 0 {
+		if count > uint64(len(patch)) || off+count < off || int(off+count) < 0 {
 			return m.broken(errCorrupt)
 		}
-		if off&1 != 0 {
+		if isDisk {
 			// disk patch
-			off >>= 1
-			if _, err := m.disk.WriteAt(patch, int64(off)); err != nil {
+			if _, err := m.disk.WriteAt(patch[:count], m.diskOff+int64(off)); err != nil {
 				return m.broken(err)
 			}
 		} else {
 			// memory patch
-			off >>= 1
 			if off+count > uint64(len(m.mem)) {
 				mem, err := m.span.Expand(int(off + count))
 				if err != nil {
@@ -570,7 +569,7 @@ func (m *Mem) replay(patch []byte) error {
 				}
 				m.mem = mem
 			}
-			copy(m.mem[off:off+count], patch)
+			copy(m.mem[off:off+count], patch[:count])
 			m.patched = max(m.patched, int(off+count))
 		}
 		patch = patch[count:]
@@ -684,7 +683,10 @@ func (m *Mem) WriteDisk(src []byte, off int64) error {
 	}
 	return m.mutate(uint64(off)<<1|1, src, func() error {
 		_, err := m.disk.WriteAt(src, m.diskOff+off)
-		return m.broken(err)
+		if err != nil {
+			return m.broken(err)
+		}
+		return nil
 	})
 }
 
@@ -937,8 +939,16 @@ func (m *Mem) maybeCompact(n int) error {
 		return m.broken(err)
 	}
 
+	// Sync m.disk to disk, because we are about to abandon
+	// all the disk patches in m.current.
+	if m.disk != nil {
+		if err := m.disk.Sync(); err != nil {
+			return m.broken(err)
+		}
+	}
+
 	// Open will start using the tree when the bigger sequence number hits the disk,
-	// so we want to make sure that happens lasm.
+	// so we want to make sure that happens last.
 	// Sync entire tree to disk, then update sequence number, then sync again.
 	if err := m.sync(m.next); err != nil {
 		return err
@@ -1021,7 +1031,7 @@ func (m *Mem) sync(w *writer) error {
 	return nil
 }
 
-// Releasesyncs the memory and makes the in-memory data unreadable.
+// Release syncs the memory and makes the in-memory data unreadable.
 // Future accesses to the slice data will fault, causing the program to crash,
 // unless [runtime/debug.SetPanicOnFault] has changed the fault behavior.
 //
