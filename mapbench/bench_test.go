@@ -43,14 +43,14 @@ type callMap interface {
 }
 
 func benchMutex(impl callMap, manyCall bool, ballast int) func(*testing.B) {
+	bb := new(Balancer)
+	for i := 0; i < ballast; i++ {
+		impl.Store(new(K), bb)
+	}
+
 	return func(b *testing.B) {
 		b.SetParallelism(100)
 		b.ReportAllocs()
-		bb := new(Balancer)
-
-		for range ballast {
-			impl.Store(new(Call), bb)
-		}
 
 		b.RunParallel(func(pb *testing.PB) {
 			var call *Call
