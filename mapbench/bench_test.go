@@ -45,7 +45,7 @@ type callMap interface {
 func benchMutex(impl callMap, manyCall bool, ballast int) func(*testing.B) {
 	bb := new(Balancer)
 	for i := 0; i < ballast; i++ {
-		impl.Store(new(K), bb)
+		impl.Store(new(Call), bb)
 	}
 
 	return func(b *testing.B) {
