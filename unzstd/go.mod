@@ -1,5 +1,5 @@
 module rsc.io/tmp/unzstd
 
-go 1.21.0
+go 1.22
 
-require github.com/klauspost/compress v1.16.7
+require github.com/klauspost/compress v1.18.0

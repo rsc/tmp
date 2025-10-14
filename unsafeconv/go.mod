@@ -1,11 +1,10 @@
 module rsc.io/tmp/unsafeconv
 
-go 1.15
+go 1.24.0
+
+require golang.org/x/tools v0.38.0
 
 require (
-	github.com/boltdb/bolt v1.3.1 // indirect
-	github.com/google/gopacket v1.1.18 // indirect
-	golang.org/x/net v0.0.0-20200707034311-ab3426394381 // indirect
-	golang.org/x/sys v0.0.0-20200812155832-6a926be9bd1d // indirect
-	golang.org/x/tools v0.0.0-20200812231640-9176cd30088c
+	golang.org/x/mod v0.29.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
 )
