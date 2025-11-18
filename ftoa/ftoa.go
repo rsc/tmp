@@ -70,11 +70,31 @@ func ftoa(f float64, prec int) (dm uint64, dp int) {
 	return dm, dp
 }
 
+// smalls is the formatting of 00..99 concatenated,
+// a lookup table for formatting [0, 99].
+const smalls = "00010203040506070809" +
+	"10111213141516171819" +
+	"20212223242526272829" +
+	"30313233343536373839" +
+	"40414243444546474849" +
+	"50515253545556575859" +
+	"60616263646566676869" +
+	"70717273747576777879" +
+	"80818283848586878889" +
+	"90919293949596979899"
+
 func efmt(dst []byte, f float64, prec int) []byte {
 	dm, dp := ftoa(f, prec)
-	for i := prec; i >= 1; i-- {
-		dst[i] = byte('0' + dm%10)
-		dm /= 10
+	i := prec
+	for ; i >= 2; i -= 2 {
+		// Write two digits at a time from smalls.
+		r := dm % 100
+		dm /= 100
+		dst[i-1] = smalls[2*r]
+		dst[i] = smalls[2*r+1]
+	}
+	if i == 1 {
+		dst[i] = byte('0' + int(dm))
 	}
 	dp += prec - 1
 	dst[0] = dst[1]

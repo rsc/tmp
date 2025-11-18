@@ -16,8 +16,8 @@ import (
 
 	"rsc.io/tmp/ftoa/dblconv"
 	"rsc.io/tmp/ftoa/dmg"
+	"rsc.io/tmp/ftoa/go124"
 	"rsc.io/tmp/ftoa/ken"
-	_ "rsc.io/tmp/ftoa/ken"
 	"rsc.io/tmp/ftoa/rsc"
 	"rsc.io/tmp/ftoa/ryu"
 )
@@ -111,7 +111,15 @@ var inputs = []struct {
 	{1.0, 10},
 	{1.234, 5},
 	{0.0001234, 5},
+	{math.Pi, 17},
+	{math.Pi * 1e50, 17},
+	{math.Pi * 1e100, 17},
 	{math.Pi * 1e200, 17},
+	{math.Pi * 1e300, 17},
+	{math.Pi * 1e-50, 17},
+	{math.Pi * 1e-100, 17},
+	{math.Pi * 1e-200, 17},
+	{math.Pi * 1e-300, 17},
 }
 
 type alt struct {
@@ -124,6 +132,8 @@ var alts = []alt{
 	{"ftoa", ftoaLoop, 18},
 	{"AppendFloat", appendFloatLoop, 18},
 	{"Appendf", appendfLoop, 18},
+	{"go124ryu", go124.LoopRyu, 18},
+	{"go124unopt", go124.LoopUnopt, 18},
 	{"gcvt", gcvtLoop, 17},
 	{"snprintf", snprintfLoop, 17},
 	{"dblconv", dblconv.Loop, 3}, // dblconv rounds 0.5 up
@@ -134,11 +144,11 @@ var alts = []alt{
 }
 
 func BenchmarkFormat(b *testing.B) {
-	for _, impl := range alts {
-		b.Run("impl="+impl.name, func(b *testing.B) {
-			for _, in := range inputs {
-				var buf [100]byte
-				b.Run(fmt.Sprintf("f=%.*e", in.prec-1, in.f), func(b *testing.B) {
+	for _, in := range inputs {
+		var buf [100]byte
+		b.Run(fmt.Sprintf("f=%.*e", in.prec-1, in.f), func(b *testing.B) {
+			for _, impl := range alts {
+				b.Run("impl="+impl.name, func(b *testing.B) {
 					impl.fn(buf[:0], b.N, in.f, in.prec)
 				})
 			}
