@@ -1,11 +1,15 @@
 package dmg
 
-import "C"
-
 /*
-#include <string.h>
+#cgo CFLAGS: -DIEEE_8087 -DLong=int -w
 
-char *dmgdtoa(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve);
+#include <string.h>
+#include <stdlib.h>
+
+char *dtoa19970128(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve);
+char *dtoa20161215(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve);
+char *dtoa20170421(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve);
+char *dtoa20251117(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve);
 
 static int
 roundup(int i, char *p)
@@ -23,16 +27,34 @@ roundup(int i, char *p)
 }
 
 void
-loopdmg(char *dst, long long n, double f, int prec)
+loopdmg(int which, char *dst, long long n, double f, int prec)
 {
 	char buf[100], *p;
 	int exp, neg, ns, i;
+	char *(*dtoa)(double, int, int, int*, int*, char**);
+
+	switch(which){
+	default:
+		abort();
+	case 19970128:
+		dtoa = dtoa19970128;
+		break;
+	case 20161215:
+		dtoa = dtoa20161215;
+		break;
+	case 20170421:
+		dtoa = dtoa20170421;
+		break;
+	case 20251117:
+		dtoa = dtoa20251117;
+		break;
+	}
 
 	exp = 0;
 	ns = 0;
 	buf[0] = 0;
 	for(long long i = 0; i < n; i++) {
-		strcpy(buf+1, dmgdtoa(f, 2, prec, &exp, &neg, 0));
+		strcpy(buf+1, dtoa(f, 2, prec, &exp, &neg, 0));
 		ns = strlen(buf+1);
 		exp--;
 		while(ns < prec)
@@ -65,9 +87,25 @@ loopdmg(char *dst, long long n, double f, int prec)
 import "C"
 import "unsafe"
 
-func Loop(dst []byte, n int, f float64, prec int) []byte {
+func Loop1997(dst []byte, n int, f float64, prec int) []byte {
+	return loop(19970128, dst, n, f, prec)
+}
+
+func Loop2016(dst []byte, n int, f float64, prec int) []byte {
+	return loop(20161215, dst, n, f, prec)
+}
+
+func Loop2017(dst []byte, n int, f float64, prec int) []byte {
+	return loop(20170421, dst, n, f, prec)
+}
+
+func Loop2025(dst []byte, n int, f float64, prec int) []byte {
+	return loop(20251117, dst, n, f, prec)
+}
+
+func loop(which int, dst []byte, n int, f float64, prec int) []byte {
 	var buf [100]byte
-	C.loopdmg((*C.char)(unsafe.Pointer(&buf[0])), C.longlong(n), C.double(f), C.int(prec))
+	C.loopdmg(C.int(which), (*C.char)(unsafe.Pointer(&buf[0])), C.longlong(n), C.double(f), C.int(prec))
 	i := 0
 	for i < len(buf) && buf[i] != 0 {
 		i++

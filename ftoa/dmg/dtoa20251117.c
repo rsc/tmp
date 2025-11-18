@@ -1,6 +1,3 @@
-// Downloaded from https://www.netlib.org/fp/dtoa.c
-#define IEEE_8087
-
 /****************************************************************
  *
  * The author of this software is David M. Gay.
@@ -375,7 +372,7 @@ Exactly one of IEEE_8087, IEEE_MC68k, VAX, or IBM should be defined.
 #ifdef SET_INEXACT
 #define dtoa_divmax 27
 #else
-int dtoa_divmax = 2;	/* Permit experimenting: on some systems, 64-bit integer */
+static int dtoa_divmax = 2;	/* Permit experimenting: on some systems, 64-bit integer */
 			/* division is slow enough that we may sometimes want to */
 			/* avoid using it.   We assume (but do not check) that   */
 			/* dtoa_divmax <= 27.*/
@@ -2719,7 +2716,7 @@ enum {	/* rounding values: same as FLT_ROUNDS */
 	Round_down = 3
 	};
 
- void
+static void
 gethex(const char **sp, U *rvp, int rounding, int sign MTd)
 {
 	Bigint *b;
@@ -3474,8 +3471,8 @@ retlow1:
 	}
 #endif /* NO_STRTOD_BIGCOMP */
 
- double
-strtod(const char *s00, char **se)
+static double
+dmgstrtod(const char *s00, char **se)
 {
 	int bb2, bb5, bbe, bd2, bd5, bbbits, bs2, c, e, e1;
 	int esign, i, j, k, nd, nd0, nf, nz, nz0, nz1, sign;
@@ -4947,7 +4944,7 @@ nrv_alloc(const char *s, char *s0, size_t s0len, char **rve, int n MTd)
  * when MULTIPLE_THREADS is not defined.
  */
 
- void
+static void
 freedtoa(char *s)
 {
 #ifdef MULTIPLE_THREADS
@@ -4996,7 +4993,7 @@ freedtoa(char *s)
  *	   calculation.
  */
 
- char *
+static char *
 dtoa_r(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve, char *buf, size_t blen)
 {
  /*	Arguments ndigits, decpt, sign are similar to those
@@ -6235,7 +6232,7 @@ dtoa_r(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve, char
 	}
 
  char *
-dmgdtoa(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve)
+dtoa20251117(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve)
 {
 	/*	Sufficient space is allocated to the return value
 		to hold the suppressed trailing zeros.

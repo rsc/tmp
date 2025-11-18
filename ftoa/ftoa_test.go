@@ -108,9 +108,21 @@ var inputs = []struct {
 	f    float64
 	prec int
 }{
-	{1.0, 10},
-	{1.234, 5},
-	{0.0001234, 5},
+	// http://swtch.com/dmg-fmt.pdf
+	// Table 3 "typical cases"
+	{1.23, 6},
+	{1.23e+20, 6},
+	{1.23e-20, 6},
+	{1.23456789, 6},
+	{1.23456589e+20, 6},
+	{1.23456789e-20, 6},
+	{1234565, 6},
+
+	// Table 4 "hard cases"
+	{1.234565, 6},
+	{1.234565e+20, 6},
+	{1.234565e-20, 6},
+
 	{math.Pi, 17},
 	{math.Pi * 1e50, 17},
 	{math.Pi * 1e100, 17},
@@ -130,15 +142,18 @@ type alt struct {
 
 var alts = []alt{
 	{"ftoa", ftoaLoop, 18},
+	{"ryu", ryu.Loop, 18},
+	{"dtoa1997", dmg.Loop1997, 18},
+	{"dtoa2016", dmg.Loop2016, 18},
+	{"dtoa2017", dmg.Loop2017, 18},
+	{"dtoa2025", dmg.Loop2025, 18},
+	{"dblconv", dblconv.Loop, 3}, // dblconv rounds 0.5 up
+	{"go124ryu", go124.LoopRyu, 18},
+	{"gcvt", gcvtLoop, 17},
 	{"AppendFloat", appendFloatLoop, 18},
 	{"Appendf", appendfLoop, 18},
-	{"go124ryu", go124.LoopRyu, 18},
 	{"go124unopt", go124.LoopUnopt, 18},
-	{"gcvt", gcvtLoop, 17},
 	{"snprintf", snprintfLoop, 17},
-	{"dblconv", dblconv.Loop, 3}, // dblconv rounds 0.5 up
-	{"ryu", ryu.Loop, 18},
-	{"dmg", dmg.Loop, 18},
 	{"ken", ken.Loop, 5},
 	{"rsc", rsc.Loop, 13},
 }
@@ -146,13 +161,11 @@ var alts = []alt{
 func BenchmarkFormat(b *testing.B) {
 	for _, in := range inputs {
 		var buf [100]byte
-		b.Run(fmt.Sprintf("f=%.*e", in.prec-1, in.f), func(b *testing.B) {
-			for _, impl := range alts {
-				b.Run("impl="+impl.name, func(b *testing.B) {
-					impl.fn(buf[:0], b.N, in.f, in.prec)
-				})
-			}
-		})
+		for _, impl := range alts {
+			b.Run(fmt.Sprintf("f=%g/prec=%d/impl=%s", in.f, in.prec, impl.name), func(b *testing.B) {
+				impl.fn(buf[:0], b.N, in.f, in.prec)
+			})
+		}
 	}
 }
 
