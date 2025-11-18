@@ -5,47 +5,49 @@
 package ftoa
 
 /*
+#include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 
-int
-loopSnprintf(long long n, double f, int prec)
+void
+loopgcvt(char *dst, long long n, double f, int prec)
 {
-	int total;
 	char buf[100];
 
-	total = 0;
-	for (long long i = 0; i < n; i++) {
-		snprintf(buf, sizeof buf, "%.*e", prec, f);
-		total += buf[2];
-	}
-	return total;
+	for (long long i = 0; i < n; i++)
+		gcvt(f, prec, buf);
+	strcpy(dst, buf);
 }
 
-int
-loopSnprintd(long long n, long long d)
+void
+loopsnprintf(char *dst, long long n, double f, int prec)
 {
-	int total;
 	char buf[100];
 
-	total = 0;
-	for (long long i = 0; i < n; i++) {
-		snprintf(buf, sizeof buf, "%lld", d);
-		total += buf[2];
-	}
-	return total;
+	for (long long i = 0; i < n; i++)
+		snprintf(buf, sizeof buf, "%.*e", prec-1, f);
+	strcpy(dst, buf);
 }
 */
 import "C"
+import "unsafe"
 
-func init() {
-	loopSnprintf = _loopSnprintf
-	loopSnprintd = _loopSnprintd
+func gcvtLoop(dst []byte, n int, f float64, prec int) []byte {
+	var buf [100]byte
+	C.loopgcvt((*C.char)(unsafe.Pointer(&buf[0])), C.longlong(n), C.double(f), C.int(prec))
+	i := 0
+	for i < len(buf) && buf[i] != 0 {
+		i++
+	}
+	return append(dst, buf[:i]...)
 }
 
-func _loopSnprintf(n int, f float64, prec int) {
-	C.loopSnprintf(C.longlong(n), C.double(f), C.int(prec))
-}
-
-func _loopSnprintd(n int, d int64) {
-	C.loopSnprintd(C.longlong(n), C.longlong(d))
+func snprintfLoop(dst []byte, n int, f float64, prec int) []byte {
+	var buf [100]byte
+	C.loopsnprintf((*C.char)(unsafe.Pointer(&buf[0])), C.longlong(n), C.double(f), C.int(prec))
+	i := 0
+	for i < len(buf) && buf[i] != 0 {
+		i++
+	}
+	return append(dst, buf[:i]...)
 }

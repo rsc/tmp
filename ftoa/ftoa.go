@@ -71,34 +71,34 @@ func ftoa(f float64, prec int) (dm uint64, dp int) {
 }
 
 func efmt(dst []byte, f float64, prec int) []byte {
-	prec++
 	dm, dp := ftoa(f, prec)
 	for i := prec; i >= 1; i-- {
 		dst[i] = byte('0' + dm%10)
 		dm /= 10
 	}
+	dp += prec - 1
 	dst[0] = dst[1]
 	dst[1] = '.'
-	dst[prec] = 'e'
+	dst[prec+1] = 'e'
 	if dp < 0 {
-		dst[prec+1] = '-'
+		dst[prec+2] = '-'
 		dp = -dp
 	} else {
-		dst[prec+1] = '+'
+		dst[prec+2] = '+'
 	}
 	if dp < 10 {
-		dst[prec+2] = byte('0' + dp)
-		return dst[:prec+3]
-	}
-	if dp < 100 {
-		dst[prec+2] = byte('0' + dp/10)
-		dst[prec+3] = byte('0' + dp%10)
+		dst[prec+3] = byte('0' + dp)
 		return dst[:prec+4]
 	}
-	dst[prec+2] = byte('0' + dp/100)
-	dst[prec+3] = byte('0' + dp/10%10)
-	dst[prec+4] = byte('0' + dp%10)
-	return dst[:prec+5]
+	if dp < 100 {
+		dst[prec+3] = byte('0' + dp/10)
+		dst[prec+4] = byte('0' + dp%10)
+		return dst[:prec+5]
+	}
+	dst[prec+3] = byte('0' + dp/100)
+	dst[prec+4] = byte('0' + dp/10%10)
+	dst[prec+5] = byte('0' + dp%10)
+	return dst[:prec+6]
 }
 
 // divisiblePow5 reports whether x is divisible by 5^p.
@@ -176,6 +176,3 @@ func mulLog2_10(x int) int {
 	// log(10)/log(2) ≈ 3.32192809489 ≈ 108853 / 2^15
 	return (x * 108853) >> 15
 }
-
-var loopSnprintf func(n int, f float64, prec int)
-var loopSnprintd func(n int, d int64)
