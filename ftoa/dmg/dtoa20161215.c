@@ -2485,8 +2485,8 @@ retlow1:
 	}
 #endif /* NO_STRTOD_BIGCOMP */
 
-static double
-dmgstrtod
+double
+strtod20161215
 #ifdef KR_headers
 	(s00, se) CONST char *s00; char **se;
 #else

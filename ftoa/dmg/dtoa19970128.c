@@ -1289,8 +1289,8 @@ match
 	}
 #endif /* INFNAN_CHECK */
 
-static double
-dmgstrtod
+double
+strtod19970128
 #ifdef KR_headers
 	(s00, se) CONST char *s00; char **se;
 #else

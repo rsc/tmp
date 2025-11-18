@@ -11,6 +11,11 @@ char *dtoa20161215(double dd, int mode, int ndigits, int *decpt, int *sign, char
 char *dtoa20170421(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve);
 char *dtoa20251117(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve);
 
+double strtod19970128(const char*, char**);
+double strtod20161215(const char*, char**);
+double strtod20170421(const char*, char**);
+double strtod20251117(const char*, char**);
+
 static int
 roundup(int i, char *p)
 {
@@ -83,6 +88,37 @@ loopdmg(int which, char *dst, long long n, double f, int prec)
 	}
 	strcpy(dst, buf);
 }
+
+double
+loopdmgstrtod(int which, long long n, char *p)
+{
+	double d;
+	char *e;
+	double (*strtod)(const char*, char**);
+
+	switch(which){
+	default:
+		abort();
+	case 19970128:
+		strtod = strtod19970128;
+		break;
+	case 20161215:
+		strtod = strtod20161215;
+		break;
+	case 20170421:
+		strtod = strtod20170421;
+		break;
+	case 20251117:
+		strtod = strtod20251117;
+		break;
+	}
+
+
+	d = 0.0;
+	for (long long i = 0; i < n; i++)
+		d = strtod(p, &e);
+	return d;
+}
 */
 import "C"
 import "unsafe"
@@ -111,4 +147,26 @@ func loop(which int, dst []byte, n int, f float64, prec int) []byte {
 		i++
 	}
 	return append(dst, buf[:i]...)
+}
+
+func LoopStrtod1997(n int, s string) float64 {
+	return loopstrtod(19970128, n, s)
+}
+
+func LoopStrtod2016(n int, s string) float64 {
+	return loopstrtod(20161215, n, s)
+}
+
+func LoopStrtod2017(n int, s string) float64 {
+	return loopstrtod(20170421, n, s)
+}
+
+func LoopStrtod2025(n int, s string) float64 {
+	return loopstrtod(20251117, n, s)
+}
+
+func loopstrtod(which int, n int, src string) float64 {
+	p := C.CString(src)
+	defer C.free(unsafe.Pointer(p))
+	return float64(C.loopdmgstrtod(C.int(which), C.longlong(n), p))
 }

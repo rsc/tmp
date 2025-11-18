@@ -3428,8 +3428,8 @@ retlow1:
 	}
 #endif /* NO_STRTOD_BIGCOMP */
 
-static double
-dmgstrtod(const char *s00, char **se)
+double
+strtod20170421(const char *s00, char **se)
 {
 	int bb2, bb5, bbe, bd2, bd5, bbbits, bs2, c, e, e1;
 	int esign, i, j, k, nd, nd0, nf, nz, nz0, nz1, sign;

@@ -16,6 +16,7 @@ import (
 
 	"rsc.io/tmp/ftoa/dblconv"
 	"rsc.io/tmp/ftoa/dmg"
+	"rsc.io/tmp/ftoa/fast_float"
 	"rsc.io/tmp/ftoa/go124"
 	"rsc.io/tmp/ftoa/ken"
 	"rsc.io/tmp/ftoa/rsc"
@@ -194,4 +195,62 @@ func appendfLoop(dst []byte, n int, f float64, prec int) []byte {
 		i = len(fmt.Appendf(buf[:0], "%.*e", prec-1, f))
 	}
 	return append(dst, buf[:i]...)
+}
+
+type parseAlt struct {
+	name string
+	fn   func(int, string) float64
+}
+
+var parseAlts = []parseAlt{
+	{"ParseFloat", parseFloatLoop},
+	{"fast_float", fast_float.LoopStrtod},
+	{"strtod1997", dmg.LoopStrtod1997},
+	{"strtod2016", dmg.LoopStrtod2016},
+	{"strtod2017", dmg.LoopStrtod2017},
+	{"strtod2025", dmg.LoopStrtod2025},
+}
+
+var parseInputs = []string{
+	"1.2345",
+	"1.3553e142",
+	"9.8765432101234567",
+	"43.928328999999962",
+	"66.294723999999917",
+}
+
+func TestAltParse(t *testing.T) {
+	for _, impl := range parseAlts {
+		t.Run(impl.name, func(t *testing.T) {
+			for _, in := range parseInputs {
+				want, err := strconv.ParseFloat(in, 64)
+				if err != nil {
+					t.Fatal(err)
+				}
+				have := impl.fn(1, in)
+				if have != want {
+					t.Errorf("strtod(%s) = %v, want %v", in, have, want)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkParse(b *testing.B) {
+	for _, in := range parseInputs {
+		for _, impl := range parseAlts {
+			b.Run(fmt.Sprintf("s=%s/impl=%s", in, impl.name), func(b *testing.B) {
+				b.SetBytes(int64(len(in)))
+				impl.fn(b.N, in)
+			})
+		}
+	}
+}
+
+func parseFloatLoop(n int, s string) float64 {
+	var f float64
+	for range n {
+		f, _ = strconv.ParseFloat(s, 64)
+	}
+	return f
 }
