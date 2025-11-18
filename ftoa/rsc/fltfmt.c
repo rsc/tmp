@@ -1,4 +1,4 @@
-// Copied from plan9port src/lib9/fmt/fltfmt.c
+// Copied and modified from plan9port src/lib9/fmt/fltfmt.c
 
 /*
  * The authors of this software are Rob Pike and Ken Thompson,

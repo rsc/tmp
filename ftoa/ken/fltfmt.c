@@ -63,6 +63,8 @@ static double pows10[] =
 	1e150, 1e151, 1e152, 1e153, 1e154, 1e155, 1e156, 1e157, 1e158, 1e159,
 };
 
+#define	pow10(x)  fmtpow10(x)
+
 static double
 pow10(int n)
 {

@@ -1,3 +1,4 @@
 module rsc.io/tmp/ftoa
 
-go 1.26
+go 1.25.0
+
