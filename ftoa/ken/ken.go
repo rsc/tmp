@@ -3,8 +3,10 @@ package ken
 /*
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 char* kendtoa(double f, int mode, int ndigits, int *decpt, int *rsign, char **rve);
+double fmtstrtod(const char*, char**);
 
 static int
 roundup(int i, char *p)
@@ -82,6 +84,35 @@ loopken(char *dst, long long n, double f, int prec)
 	strcpy(dst, buf);
 }
 
+double
+kenloopstrtod(long long n, char *s)
+{
+	double f;
+	int len = strlen(s);
+	for(long long i = 0; i < n; i++)
+		f = fmtstrtod(s, NULL);
+	return f;
+}
+
+double
+kensumstrtod(long long n, char *s)
+{
+	double f;
+	for (long long i = 0; i < n; i++) {
+		char *start = s;
+		double total = 0.0;
+		for (char *p = s; *p; p++) {
+			if(*p == '\n') {
+				total += fmtstrtod(start, NULL);
+				start = p+1;
+			}
+		}
+		f = total;
+	}
+	return f;
+}
+
+
 */
 import "C"
 import "unsafe"
@@ -94,4 +125,16 @@ func Loop(dst []byte, n int, f float64, prec int) []byte {
 		i++
 	}
 	return append(dst, buf[:i]...)
+}
+
+func LoopStrtod(n int, s string) float64 {
+	p := C.CString(s)
+	defer C.free(unsafe.Pointer(p))
+	return float64(C.kenloopstrtod(C.longlong(n), p))
+}
+
+func LoopSumStrtod(n int, s string) float64 {
+	p := C.CString(s)
+	defer C.free(unsafe.Pointer(p))
+	return float64(C.kensumstrtod(C.longlong(n), p))
 }

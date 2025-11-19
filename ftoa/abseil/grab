@@ -1,0 +1,7 @@
+#!/bin/bash
+
+cat /Users/rsc/pub/abseil-cpp/$1 > $(echo $1 | tr / _)
+echo '
+,x g/^#include "/ s;([^ /])/;\1_;g
+w
+' |sam -d $(echo $1 | tr / _)

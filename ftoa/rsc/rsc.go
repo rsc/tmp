@@ -30,7 +30,7 @@ looprsc(char *dst, long long n, double f, int prec)
 	exp = 0;
 	ns = 0;
 	buf[0] = 0;
-	for(long long i = 0; i < n; i++) {
+	for(long long z = 0; z < n; z++) {
 		rscdtoa(f, buf+1, &exp, &neg, &ns);
 		if(ns > prec) {
 			if(roundup(buf[1+prec-1], buf+1+prec)) {

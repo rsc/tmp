@@ -1,23 +1,24 @@
-package fast_float
+package abseil
 
 /*
-#include <string.h>
+#cgo CXXFLAGS: -std=c++17
+
 #include <stdlib.h>
+#include <string.h>
 
-double fast_float_strtod(const char*, int);
-
+double abslstrtod(const char*, int);
 double
-loopfastfloatstrtod(long long n, char *s)
+loopabslstrtod(long long n, char *s)
 {
 	double f;
 	int len = strlen(s);
 	for(long long i = 0; i < n; i++)
-		f = fast_float_strtod(s, len);
+		f = abslstrtod(s, len);
 	return f;
 }
 
 double
-sumfastfloatstrtod(long long n, char *s)
+sumabslstrtod(long long n, char *s)
 {
 	double f;
 	for (long long i = 0; i < n; i++) {
@@ -25,7 +26,7 @@ sumfastfloatstrtod(long long n, char *s)
 		double total = 0.0;
 		for (char *p = s; *p; p++) {
 			if(*p == '\n') {
-				total += fast_float_strtod(start, p-start);
+				total += abslstrtod(start, p-start);
 				start = p+1;
 			}
 		}
@@ -41,11 +42,11 @@ import "unsafe"
 func LoopStrtod(n int, s string) float64 {
 	p := C.CString(s)
 	defer C.free(unsafe.Pointer(p))
-	return float64(C.loopfastfloatstrtod(C.longlong(n), p))
+	return float64(C.loopabslstrtod(C.longlong(n), p))
 }
 
 func LoopSumStrtod(n int, s string) float64 {
 	p := C.CString(s)
 	defer C.free(unsafe.Pointer(p))
-	return float64(C.sumfastfloatstrtod(C.longlong(n), p))
+	return float64(C.sumabslstrtod(C.longlong(n), p))
 }

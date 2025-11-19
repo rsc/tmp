@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"rsc.io/tmp/ftoa/abseil"
 	"rsc.io/tmp/ftoa/dblconv"
 	"rsc.io/tmp/ftoa/dmg"
 	"rsc.io/tmp/ftoa/fast_float"
@@ -144,13 +145,14 @@ type alt struct {
 var alts = []alt{
 	{"ftoa", ftoaLoop, 18},
 	{"ryu", ryu.Loop, 18},
-	{"dtoa1997", dmg.Loop1997, 18},
-	{"dtoa2016", dmg.Loop2016, 18},
-	{"dtoa2017", dmg.Loop2017, 18},
-	{"dtoa2025", dmg.Loop2025, 18},
+	{"dmg1997", dmg.Loop1997, 18},
+	{"dmg2016", dmg.Loop2016, 18},
+	{"dmg2017", dmg.Loop2017, 18},
+	{"dmg2025", dmg.Loop2025, 18},
 	{"dblconv", dblconv.Loop, 3}, // dblconv rounds 0.5 up
 	{"go124ryu", go124.LoopRyu, 18},
 	{"gcvt", gcvtLoop, 17},
+	{"cxx", cxxLoop, 17},
 	{"AppendFloat", appendFloatLoop, 18},
 	{"Appendf", appendfLoop, 18},
 	{"go124unopt", go124.LoopUnopt, 18},
@@ -159,12 +161,77 @@ var alts = []alt{
 	{"rsc", rsc.Loop, 13},
 }
 
+type formatSum struct {
+	name string
+	fn   func(int, []float64, int) int64
+}
+
+var formatSums = []formatSum{
+	{"ftoa", ftoaLoopSum},
+	{"ryu", ryu.LoopSum},
+	{"dblconv", dblconv.LoopSum},
+	{"go124ryu", go124.LoopSumRyu},
+	{"go124unopt", go124.LoopSumUnopt},
+	{"gcvt", gcvtLoopSum},
+	{"cxx", cxxLoopSum},
+	{"AppendFloat", appendFloatLoopSum},
+	{"dmg1997", dmg.LoopSum1997},
+	{"dmg2016", dmg.LoopSum2016},
+	{"dmg2017", dmg.LoopSum2017},
+	{"dmg2025", dmg.LoopSum2025},
+}
+
+var canadaFloats = parseCanada()
+
+func parseCanada() []float64 {
+	var fs []float64
+	for line := range strings.Lines(canada) {
+		f, err := strconv.ParseFloat(strings.TrimSpace(line), 64)
+		if err != nil {
+			panic(err)
+		}
+		fs = append(fs, math.Abs(f))
+	}
+	return fs
+}
+
 func BenchmarkFormat(b *testing.B) {
 	for _, in := range inputs {
 		var buf [100]byte
 		for _, impl := range alts {
 			b.Run(fmt.Sprintf("f=%g/prec=%d/impl=%s", in.f, in.prec, impl.name), func(b *testing.B) {
 				impl.fn(buf[:0], b.N, in.f, in.prec)
+			})
+		}
+	}
+}
+
+func TestFormatCanada(t *testing.T) {
+	for i := range canadaFloats {
+		want := ftoaLoopSum(1, canadaFloats[i:i+1], 2)
+		have := ryu.LoopSum(1, canadaFloats[i:i+1], 2)
+		if have != want {
+			println(canadaFloats[i], "HAVE", have, string(ftoaLoop(nil, 1, canadaFloats[i], 2)), "WANT", want, string(ryu.Loop(nil, 1, canadaFloats[i], 2)))
+		}
+	}
+	want := []int64{5979925, 5976396, 5976389, 5976389}
+	for _, impl := range formatSums {
+		t.Run(impl.name, func(t *testing.T) {
+			for i, prec := range []int{2, 5, 10, 17} {
+				have := impl.fn(1, canadaFloats, prec)
+				if have != want[i] {
+					t.Errorf("formatSum(prec=%d) = %v, want %v", prec, have, want[i])
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkFormatCanada(b *testing.B) {
+	for _, prec := range []int{2, 5, 10, 17} {
+		for _, impl := range formatSums {
+			b.Run(fmt.Sprintf("prec=%d/impl=%s", prec, impl.name), func(b *testing.B) {
+				impl.fn(b.N/len(canadaFloats), canadaFloats, prec)
 			})
 		}
 	}
@@ -179,6 +246,20 @@ func ftoaLoop(dst []byte, n int, f float64, prec int) []byte {
 	return append(dst, buf[:i]...)
 }
 
+func ftoaLoopSum(n int, fs []float64, prec int) int64 {
+	var buf [100]byte
+	var out int64
+	for range n {
+		total := int64(0)
+		for _, f := range fs {
+			efmt(buf[:], f, prec)
+			total += int64(buf[0])
+		}
+		out = total
+	}
+	return out
+}
+
 func appendFloatLoop(dst []byte, n int, f float64, prec int) []byte {
 	var buf [100]byte
 	i := 0
@@ -186,6 +267,20 @@ func appendFloatLoop(dst []byte, n int, f float64, prec int) []byte {
 		i = len(strconv.AppendFloat(buf[:0], f, 'e', prec-1, 64))
 	}
 	return append(dst, buf[:i]...)
+}
+
+func appendFloatLoopSum(n int, fs []float64, prec int) int64 {
+	var buf [100]byte
+	var out int64
+	for range n {
+		total := int64(0)
+		for _, f := range fs {
+			strconv.AppendFloat(buf[:0], f, 'e', prec-1, 64)
+			total += int64(buf[0])
+		}
+		out = total
+	}
+	return out
 }
 
 func appendfLoop(dst []byte, n int, f float64, prec int) []byte {
@@ -205,10 +300,13 @@ type parseAlt struct {
 var parseAlts = []parseAlt{
 	{"ParseFloat", parseFloatLoop},
 	{"fast_float", fast_float.LoopStrtod},
-	{"strtod1997", dmg.LoopStrtod1997},
-	{"strtod2016", dmg.LoopStrtod2016},
-	{"strtod2017", dmg.LoopStrtod2017},
-	{"strtod2025", dmg.LoopStrtod2025},
+	{"abseil", abseil.LoopStrtod},
+	{"strtod", strtodLoop},
+	{"ken", ken.LoopStrtod},
+	{"dmg1997", dmg.LoopStrtod1997},
+	{"dmg2016", dmg.LoopStrtod2016},
+	{"dmg2017", dmg.LoopStrtod2017},
+	{"dmg2025", dmg.LoopStrtod2025},
 }
 
 var parseInputs = []string{
@@ -251,6 +349,65 @@ func parseFloatLoop(n int, s string) float64 {
 	var f float64
 	for range n {
 		f, _ = strconv.ParseFloat(s, 64)
+	}
+	return f
+}
+
+type sum struct {
+	name string
+	fn   func(int, string) float64
+}
+
+var sums = []sum{
+	{"ParseFloat", loopSumParseFloat},
+	{"abseil", abseil.LoopSumStrtod},
+	{"fast_float", fast_float.LoopSumStrtod},
+	{"strtod", strtodLoopSum},
+	{"ken", ken.LoopSumStrtod},
+	{"dmg1997", dmg.LoopSumStrtod1997},
+	{"dmg2016", dmg.LoopSumStrtod2016},
+	{"dmg2017", dmg.LoopSumStrtod2017},
+	{"dmg2025", dmg.LoopSumStrtod2025},
+}
+
+//go:embed testdata/canada.txt
+var canada string
+
+var canadaTotal = -1.265531108883936e+06
+
+func TestCanada(t *testing.T) {
+	for _, impl := range sums {
+		t.Run(impl.name, func(t *testing.T) {
+			f := impl.fn(1, canada)
+			if f != canadaTotal {
+				t.Fatalf("Sum = %v, want %v", f, canadaTotal)
+			}
+		})
+	}
+}
+
+func BenchmarkParseCanada(b *testing.B) {
+	for _, impl := range sums {
+		b.Run(fmt.Sprintf("impl=%s", impl.name), func(b *testing.B) {
+			b.SetBytes(int64(len(canada)))
+			impl.fn(b.N, canada)
+		})
+	}
+}
+
+func loopSumParseFloat(n int, s string) float64 {
+	var f float64
+	for range n {
+		start := 0
+		total := 0.0
+		for i, c := range []byte(s) {
+			if c == '\n' {
+				ff, _ := strconv.ParseFloat(s[start:i], 64)
+				total += ff
+				start = i + 1
+			}
+		}
+		f = total
 	}
 	return f
 }
