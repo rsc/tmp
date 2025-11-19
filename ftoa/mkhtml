@@ -1,0 +1,29 @@
+#!/usr/local/plan9/bin/rc
+
+for (goarch in amd64 arm64)
+for (goos in linux darwin freebsd) {
+	echo goarch $goarch
+	echo goos $goos
+	benchstat -format=csv -filter '.name:/Format/ goos:'$goos' goarch:'$goarch -col '/impl@(ftoa go124ryu dmg2017 ryu dblconv dmg1997 gcvt)' bench.* |
+	9 sed '
+		s;FormatCanada/prec=([0-9]+)-[0-9]+;Formatcanada.txt (\1);
+		s;Format/f=([^/]+)/prec=([0-9]+)-[0-9]+;Format\1 (\2);
+	' |
+	awk -F, '
+		BEGIN {
+			printf("<table>\n")
+		}
+		$2 == "ftoa" {
+			printf("<tr><th>benchmark <th>ftoa <th>go1.25 <th>dtoa2017 <th>ryu <th>dblconv <th>dtoa1997 <th>gcvt </tr>\n")
+		}
+		/^Format/ {
+			name = $1
+			sub(/^Format/, "", name)
+			sub(/-/, "−", name)
+			printf("<tr><td>%s <td>%.0f ns <td>%.1fX <td>%.1fX <td>%.1fX <td>%.1fX <td>%.1fX <td>%.1fX </tr>\n", name, $2*1e9, ($6+100)/100, ($10+100)/100, ($14+100)/100, ($18+100)/100, ($22+100)/100, ($26+100)/100);
+		}
+		END {
+			printf("</table>\n")
+		}
+	'
+}
