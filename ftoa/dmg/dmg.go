@@ -6,11 +6,13 @@ package dmg
 #include <string.h>
 #include <stdlib.h>
 
+char *dtoa1991(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve);
 char *dtoa19970128(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve);
 char *dtoa20161215(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve);
 char *dtoa20170421(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve);
 char *dtoa20251117(double dd, int mode, int ndigits, int *decpt, int *sign, char **rve);
 
+double strtod1991(const char*, char**);
 double strtod19970128(const char*, char**);
 double strtod20161215(const char*, char**);
 double strtod20170421(const char*, char**);
@@ -74,6 +76,8 @@ loopdmg(int which, char *dst, long long n, double f, int prec)
 	switch(which){
 	default:
 		abort();
+	case 1991:
+		dtoa = dtoa1991;
 	case 19970128:
 		dtoa = dtoa19970128;
 		break;
@@ -105,6 +109,8 @@ loopsumdmg(int which, long long n, double *f, int nf, int prec)
 	switch(which){
 	default:
 		abort();
+	case 1991:
+		dtoa = dtoa1991;
 	case 19970128:
 		dtoa = dtoa19970128;
 		break;
@@ -141,6 +147,8 @@ loopdmgstrtod(int which, long long n, char *p)
 	switch(which){
 	default:
 		abort();
+	case 1991:
+		strtod = strtod1991;
 	case 19970128:
 		strtod = strtod19970128;
 		break;
@@ -172,6 +180,8 @@ loopsumdmgstrtod(int which, long long n, char *s)
 	switch(which){
 	default:
 		abort();
+	case 1991:
+		strtod = strtod1991;
 	case 19970128:
 		strtod = strtod19970128;
 		break;
@@ -206,6 +216,10 @@ loopsumdmgstrtod(int which, long long n, char *s)
 import "C"
 import "unsafe"
 
+func Loop1991(dst []byte, n int, f float64, prec int) []byte {
+	return loop(1991, dst, n, f, prec)
+}
+
 func Loop1997(dst []byte, n int, f float64, prec int) []byte {
 	return loop(19970128, dst, n, f, prec)
 }
@@ -232,6 +246,10 @@ func loop(which int, dst []byte, n int, f float64, prec int) []byte {
 	return append(dst, buf[:i]...)
 }
 
+func LoopSum1991(n int, fs []float64, prec int) int64 {
+	return loopsum(1991, n, fs, prec)
+}
+
 func LoopSum1997(n int, fs []float64, prec int) int64 {
 	return loopsum(19970128, n, fs, prec)
 }
@@ -250,6 +268,10 @@ func LoopSum2025(n int, fs []float64, prec int) int64 {
 
 func loopsum(which, n int, fs []float64, prec int) int64 {
 	return int64(C.loopsumdmg(C.int(which), C.longlong(n), (*C.double)(&fs[0]), C.int(len(fs)), C.int(prec)))
+}
+
+func LoopStrtod1991(n int, s string) float64 {
+	return loopstrtod(1991, n, s)
 }
 
 func LoopStrtod1997(n int, s string) float64 {
@@ -272,6 +294,10 @@ func loopstrtod(which int, n int, src string) float64 {
 	p := C.CString(src)
 	defer C.free(unsafe.Pointer(p))
 	return float64(C.loopdmgstrtod(C.int(which), C.longlong(n), p))
+}
+
+func LoopSumStrtod1991(n int, s string) float64 {
+	return loopsumstrtod(1991, n, s)
 }
 
 func LoopSumStrtod1997(n int, s string) float64 {
