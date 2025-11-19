@@ -9,6 +9,7 @@ package ftoa
 #include <string.h>
 #include <stdio.h>
 
+char *gcvt(double, int, char*);
 void loopcxxftoa(char*, long long, double, int);
 long long loopsumcxxftoa(long long n, double *f, int nf, int prec);
 
@@ -49,6 +50,22 @@ loopsnprintf(char *dst, long long n, double f, int prec)
 	strcpy(dst, buf);
 }
 
+long long
+loopsumsnprintf(long long n, double *f, int nf, int prec)
+{
+	char buf[100];
+	long long out;
+
+	for (long long i = 0; i < n; i++) {
+		long long total = 0;
+		for (int j = 0; j < nf; j++) {
+			snprintf(buf, sizeof buf, "%.*e", prec-1, f[j]);
+			total += buf[0];
+		}
+		out = total;
+	}
+	return out;
+}
 
 double
 loopstrtod(long long n, char *s)
@@ -104,6 +121,10 @@ func cxxLoop(dst []byte, n int, f float64, prec int) []byte {
 
 func gcvtLoopSum(n int, fs []float64, prec int) int64 {
 	return int64(C.loopsumgcvt(C.longlong(n), (*C.double)(&fs[0]), C.int(len(fs)), C.int(prec)))
+}
+
+func snprintfLoopSum(n int, fs []float64, prec int) int64 {
+	return int64(C.loopsumsnprintf(C.longlong(n), (*C.double)(&fs[0]), C.int(len(fs)), C.int(prec)))
 }
 
 func cxxLoopSum(n int, fs []float64, prec int) int64 {

@@ -76,7 +76,7 @@ func testLoop(t *testing.T, exact int, loop func([]byte, int, float64, int) []by
 		var mp []byte
 		adj := 0
 		for i, c := range m {
-			if i == 0 && c == '0' {
+			if len(mp) == 0 && c == '0' {
 				continue
 			}
 			if c == '.' {
