@@ -34,16 +34,16 @@ package ld
 
 import (
 	"bytes"
-	"rsc.io/tmp/bootstrap/internal/obj"
 	"debug/elf"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"rsc.io/tmp/bootstrap/internal/obj"
 )
 
 // Data layout and relocation.
@@ -262,13 +262,14 @@ func Lflag(arg string) {
 }
 
 // A BuildMode indicates the sort of object we are building:
-//   "exe": build a main package and everything it imports into an executable.
-//   "c-shared": build a main package, plus all packages that it imports, into a
-//     single C shared library. The only callable symbols will be those functions
-//     marked as exported.
-//   "shared": combine all packages passed on the command line, and their
-//     dependencies, into a single shared library that will be used when
-//     building with the -linkshared option.
+//
+//	"exe": build a main package and everything it imports into an executable.
+//	"c-shared": build a main package, plus all packages that it imports, into a
+//	  single C shared library. The only callable symbols will be those functions
+//	  marked as exported.
+//	"shared": combine all packages passed on the command line, and their
+//	  dependencies, into a single shared library that will be used when
+//	  building with the -linkshared option.
 type BuildMode uint8
 
 const (
@@ -796,7 +797,7 @@ func hostlinksetup() {
 
 	// create temporary directory and arrange cleanup
 	if tmpdir == "" {
-		dir, err := ioutil.TempDir("", "go-link-")
+		dir, err := os.MkdirTemp("", "go-link-")
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"flag"
 	"html/template"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"regexp"
@@ -45,7 +45,7 @@ func main() {
 var once sync.Once
 
 func do(f *os.File) {
-	data, err := ioutil.ReadAll(f)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		log.Fatal(err)
 	}

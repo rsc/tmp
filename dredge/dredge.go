@@ -7,7 +7,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -58,7 +57,7 @@ var cblockRE = regexp.MustCompile(`(?m)^([^/{ \t\n][^/{\n]*\n)*([^/{ \t\n][^/{\n
 
 func dredgeFile(file string) bool {
 	fmt.Printf("%s\n", file)
-	data, err := ioutil.ReadFile(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -77,7 +76,7 @@ func dredgeFile(file string) bool {
 		for i := len(matches) - 1; i >= 0; i-- {
 			m := matches[i]
 			new := append(data[:m[0]:m[0]], data[m[1]:]...)
-			if err := ioutil.WriteFile(file, new, 0666); err != nil {
+			if err := os.WriteFile(file, new, 0666); err != nil {
 				log.Fatal(err)
 			}
 			if _, err := runCmd(); err == nil {
@@ -92,7 +91,7 @@ func dredgeFile(file string) bool {
 		}
 		matches = cblockRE.FindAllIndex(data, -1)
 	}
-	ioutil.WriteFile(file, data, 0666) // always; must at least restore original
+	os.WriteFile(file, data, 0666) // always; must at least restore original
 	return progress
 }
 

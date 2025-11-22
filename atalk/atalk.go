@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -43,7 +42,7 @@ func main() {
 
 	var slides [][]byte
 	reload := func() {
-		data, err := ioutil.ReadFile(flag.Arg(0))
+		data, err := os.ReadFile(flag.Arg(0))
 		if err != nil {
 			log.Fatal(err)
 		}

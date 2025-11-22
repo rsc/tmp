@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -23,7 +22,7 @@ func main() {
 			if !strings.HasSuffix(path, ".article") {
 				return nil
 			}
-			data, err := ioutil.ReadFile(path)
+			data, err := os.ReadFile(path)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -59,7 +58,7 @@ func main() {
 				if strings.HasPrefix(line, "OldURL: /") {
 					old := strings.TrimPrefix(line, "OldURL: /")
 					redir := []byte(fmt.Sprintf("---\nredirect: /blog/%s\n---\n", strings.TrimSuffix(filepath.Base(path), ".article")))
-					err := ioutil.WriteFile(filepath.Dir(path)+"/"+old+".md", redir, 0666)
+					err := os.WriteFile(filepath.Dir(path)+"/"+old+".md", redir, 0666)
 					if err != nil {
 						log.Fatalf("%s: writing redirect: %v", path, err)
 					}
@@ -176,7 +175,7 @@ func main() {
 				_ = args
 			}
 
-			err = ioutil.WriteFile(strings.TrimSuffix(path, ".article")+".md", out.Bytes(), 0666)
+			err = os.WriteFile(strings.TrimSuffix(path, ".article")+".md", out.Bytes(), 0666)
 			if err != nil {
 				log.Fatalf("%s: %v", path, err)
 			}
