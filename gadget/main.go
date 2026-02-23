@@ -39,16 +39,16 @@ import (
 	"time"
 
 	"google.golang.org/genai"
+	"rsc.io/tmp/gadget/internal/envfile"
 )
 
 var (
 	home, _ = os.UserHomeDir()
-	model   = flag.String("m", "gemini-2.5-flash", "use gemini `model`")
+	model   = flag.String("m", "gemini-3-flash-preview", "use gemini `model`")
 
 	flagEnv = flag.String("env", filepath.Join(home, ".env"), "read env settings from `file`")
 
 	flagCode        = flag.Bool("code", false, "enable code execution tool (on Gemini servers)")
-	flagComputer    = flag.Bool("computer", false, "enable computer use tool")
 	flagMaps        = flag.Bool("maps", false, "enable Google Maps tool") // not supported in Gemini API
 	flagGoogle      = flag.Bool("google", false, "enable Google Search tool")
 	flagGoogleRAG   = flag.Bool("googlerag", false, "enable Google Search Retrieval tool") // not supported (in Gemini API?)
@@ -60,9 +60,9 @@ var (
 	flagMaxOutput   = flag.Int("maxoutput", -1, "set output limit to `N` tokens (≤ 0 is unlimited)")
 	flagSeed        = flag.Int("seed", -1, "use random seed `N`")
 	flagRot13       = flag.Bool("rot13", false, "enable local rot13 tool")
-	flagReadFile       = flag.Bool("readfile", false, "enable readfile tool")
-	flagWriteFile       = flag.Bool("writefile", false, "enable writefile tool")
-	flagShell = flag.Bool("shell", false, "enable shell tool")
+	flagReadFile    = flag.Bool("readfile", false, "enable readfile tool")
+	flagWriteFile   = flag.Bool("writefile", false, "enable writefile tool")
+	flagShell       = flag.Bool("shell", false, "enable shell tool")
 	flagAttach      = flag.String("a", "", "attach `file` to request")
 	flagJSON        = flag.Bool("json", false, "print JSON traces of all messages")
 )
@@ -172,10 +172,6 @@ func main() {
 	}
 	if *flagCode {
 		config.Tools = append(config.Tools, &genai.Tool{CodeExecution: &genai.ToolCodeExecution{}})
-	}
-	if *flagComputer {
-		// This seems to do nothing.
-		config.Tools = append(config.Tools, &genai.Tool{ComputerUse: &genai.ToolComputerUse{Environment: genai.EnvironmentBrowser}})
 	}
 	if *flagMaps {
 		config.Tools = append(config.Tools, &genai.Tool{GoogleMaps: &genai.GoogleMaps{}})
@@ -345,8 +341,8 @@ func fnCallJS(lf *os.File, fn *genai.FunctionCall, m map[string]any) *genai.Cont
 		Parts: []*genai.Part{
 			{
 				FunctionResponse: &genai.FunctionResponse{
-					ID: fn.ID,
-					Name: fn.Name,
+					ID:       fn.ID,
+					Name:     fn.Name,
 					Response: m,
 				},
 			},
