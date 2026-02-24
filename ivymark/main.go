@@ -6,11 +6,15 @@
 //
 // Usage:
 //
-//	ivymark [-w] [file...]
+//	ivymark [-html] [-src] [-w] [file...]
 //
 // Ivymark reads the named files, or else standard input, as Markdown documents,
 // executes any Ivy code blocks and updates them to contain the results,
 // and then reprints the Markdown documents to standard output .
+//
+// The -html flag specifies to write HTML to standard output.
+//
+// The -src flag specifies to print the Ivy source code blocks to standard output.
 //
 // The -w flag specifies to rewrite the files in place.
 package main
@@ -35,12 +39,13 @@ import (
 
 var (
 	htmlflag = flag.Bool("html", false, "write HTML output")
+	srcflag  = flag.Bool("src", false, "write Ivy source output")
 	wflag    = flag.Bool("w", false, "write output back to input files")
 	exit     = 0
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: ivymark [-html] [-w] [file...]\n")
+	fmt.Fprintf(os.Stderr, "usage: ivymark [-html] [-src] [-w] [file...]\n")
 	flag.PrintDefaults()
 	os.Exit(2)
 }
@@ -90,7 +95,7 @@ func convert(data []byte, file string) {
 			exit = 1
 			return
 		}
-	} else {
+	} else if !*srcflag {
 		os.Stdout.Write(out)
 	}
 }
@@ -122,12 +127,21 @@ func update(doc *markdown.Document) {
 			parser := parse.NewParser("input", scanner, context)
 			outBuf.Reset()
 			errBuf.Reset()
+			if *srcflag {
+				fmt.Printf("%s\n\n", text)
+			}
 			run.Run(parser, context, false)
 			if out := addNL(outBuf.String()); out != "" {
 				text += "-- out --\n" + out
+				if *srcflag {
+					fmt.Printf("# -- out --\n# %s\n\n", strings.ReplaceAll(out, "\n", "\n# "))
+				}
 			}
 			if err := addNL(errBuf.String()); err != "" {
 				text += "-- err --\n" + err
+				if *srcflag {
+					fmt.Printf("# -- err --\n# %s\n\n", strings.ReplaceAll(err, "\n", "\n# "))
+				}
 			}
 		}
 		lines := strings.Split(text, "\n")

@@ -16,6 +16,7 @@ import (
 	"robpike.io/ivy/parse"
 	"robpike.io/ivy/run"
 	"robpike.io/ivy/scan"
+	"robpike.io/ivy/state"
 )
 
 func main() {
@@ -35,7 +36,7 @@ func main() {
 	context := exec.NewContext(&conf)
 
 	js.Global().Set("run", js.FuncOf(func(this js.Value, args []js.Value) any {
-		scanner := scan.New(context, "input", strings.NewReader(args[0].String()))
+		scanner := scan.New(state.New(context), "input", strings.NewReader(args[0].String()))
 		parser := parse.NewParser("input", scanner, context)
 		out.Reset()
 		errOut.Reset()
