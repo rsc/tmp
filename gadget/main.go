@@ -40,6 +40,7 @@ import (
 
 	"google.golang.org/genai"
 	"rsc.io/tmp/gadget/internal/envfile"
+	"rsc.io/tmp/gadget/internal/worker"
 )
 
 var (
@@ -60,9 +61,7 @@ var (
 	flagMaxOutput   = flag.Int("maxoutput", -1, "set output limit to `N` tokens (≤ 0 is unlimited)")
 	flagSeed        = flag.Int("seed", -1, "use random seed `N`")
 	flagRot13       = flag.Bool("rot13", false, "enable local rot13 tool")
-	flagReadFile    = flag.Bool("readfile", false, "enable readfile tool")
-	flagWriteFile   = flag.Bool("writefile", false, "enable writefile tool")
-	flagShell       = flag.Bool("shell", false, "enable shell tool")
+	flagWorker      = flag.Bool("worker", false, "enable tools via MCP worker")
 	flagAttach      = flag.String("a", "", "attach `file` to request")
 	flagJSON        = flag.Bool("json", false, "print JSON traces of all messages")
 )
@@ -74,6 +73,10 @@ func usage() {
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "-runmcpworker" {
+		worker.Main()
+		return
+	}
 	log.SetFlags(0)
 	log.SetPrefix("gadget: ")
 	flag.Usage = usage
@@ -188,14 +191,10 @@ func main() {
 	if *flagRot13 {
 		registerRot13()
 	}
-	if *flagReadFile || *flagWriteFile {
-		registerReadFile()
-	}
-	if *flagWriteFile {
-		registerWriteFile()
-	}
-	if *flagShell {
-		registerShell()
+	if *flagWorker {
+		if err := startWorker(ctx); err != nil {
+			log.Fatal(err)
+		}
 	}
 	config.Tools = append(config.Tools, tools...)
 	if len(config.Tools) == 0 {
