@@ -21,6 +21,7 @@ func Main() {
 		Version: "v1.0.0",
 	}, nil)
 
+	registerEditFile(server)
 	registerReadFile(server)
 	registerWriteFile(server)
 	registerShell(server)
