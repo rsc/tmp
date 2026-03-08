@@ -1,0 +1,235 @@
+; macOS Seatbelt sandbox profile
+;
+; To watch rejected operations, use:
+;	log stream --style compact --predicate 'sender=="Sandbox"'
+; Not everything shows up there.
+; For example Java needs (allow dynamic-code-generation)
+; but if that is omitted, there is no log indicating that's the problem.
+;
+; For more examples, see /System/Library/Sandbox/Profiles on a Mac and also:
+; https://source.chromium.org/chromium/chromium/src/+/main:sandbox/policy/mac/
+; https://source.chromium.org/chromium/chromium/src/+/main:sandbox/policy/mac/common.sb
+; https://github.com/openai/codex/blob/main/codex-rs/core/src/seatbelt_base_policy.sbpl
+; https://github.com/openai/codex/blob/main/codex-rs/core/src/seatbelt_network_policy.sbpl
+; https://github.com/openai/codex/blob/main/codex-rs/core/src/seatbelt_platform_defaults.sbpl
+; https://github.com/anthropic-experimental/sandbox-runtime/blob/main/src/sandbox/macos-sandbox-utils.ts
+;
+; https://bdash.net.nz/posts/tcc-and-the-platform-sandbox-policy/
+; https://bdash.net.nz/posts/sandboxing-on-macos/
+; https://www.romab.com/ironsuite/SBPL.html
+
+; Sandbox profile language version, not the version of this sandbox rule set.
+(version 1)
+
+; Deny everything by default.
+; For debugging, can try:
+;	(allow (with report) default)
+(deny default)
+
+; Helpers
+
+(define *env* '())
+
+; SET ENVIRONMENT HERE
+
+(define (has-prefix? str prefix)
+	(let ((l (string-length prefix)))
+		(and (>= (string-length str) l) (equal? (substring str 0 l) prefix))))
+
+(define (has-suffix? str suffix)
+	(let ((strlen (string-length str)) (suffixlen (string-length suffix)))
+		(and (<= suffixlen strlen) (equal? suffix (substring str (- strlen suffixlen) strlen)))))
+
+(define (trim-suffix str suffix)
+	(let ((strlen (string-length str)) (suffixlen (string-length suffix)))
+		(if (and (<= suffixlen strlen) (equal? suffix (substring str (- strlen suffixlen) strlen)))
+			(substring str 0 (- strlen suffixlen))
+			str)))
+
+(define (string-split str char)
+	(let ((n (string-length str)))
+		(let loop ((i 0))
+			(cond
+				((>= i n) (list))
+				((equal? char (string-ref str i))
+					(cons (substring str 0 i) (string-split (substring str (+ i 1) n) char)))
+				(else (loop (+ i 1)))))))
+
+(define (parent-dirs path)
+	(let loop ((i (- (string-length path) 1)))
+		(if (<= i 0)
+			(list)
+			(if (equal? (substring path i (+ i 1)) "/")
+				(cons (substring path 0 i) (loop (- i 1)))
+				(loop (- i 1))))))
+
+(define (getenv key)
+	(let ((val (assoc key *env*)))
+		(and val (cdr val))))
+
+; (with-env VAR ...)
+; sets VAR to $VAR and only runs ... if $VAR is defined.
+(define-macro (with-env var . body)
+	`(let ((,var (getenv ,(symbol->string var))))
+		(when (string? ,var)
+			,@body)))
+
+; System operations.
+
+(allow distributed-notification-post)
+(allow dynamic-code-generation)
+(allow iokit-get-properties)
+(allow iokit-open)
+(allow ipc-posix-sem)
+(allow ipc-posix-shm)
+(allow mach-lookup)
+(allow mach-priv-task-port (target same-sandbox))
+(allow process-exec)
+(allow process-fork)
+(allow process-info* (target same-sandbox))
+(allow signal (target same-sandbox))
+(allow sysctl-read)
+(allow user-preference-read)
+
+; Network
+
+(allow network-bind)
+(allow network-inbound)
+(allow network-outbound)
+(allow system-socket)
+(allow socket-option-get)
+(allow socket-option-set)
+(allow socket-ioctl)
+(allow iokit-open-user-client)
+(allow necp-client-open)
+(allow system-necp-client-action)
+
+; Files
+
+; Helpers
+(define (deny-file path) (deny file-read* file-write* (literal path)))
+(define (deny-tree path) (deny file-read* file-write* (subpath path)))
+(define (stat-file path) (allow file-read-metadata (literal path)))
+(define (stat-parents path) (map stat-file (parent-dirs path)))
+(define (read-file path) (allow file-read* (literal path)))
+(define (read-tree path)
+	(stat-parents path)
+	(allow file-read* (subpath path)))
+(define (write-file path) (allow file-read* file-write* file-ioctl (literal path)))
+(define (write-tree path)
+	(stat-parents path)
+	(allow file-read* file-write* (subpath path)))
+
+; File system root. Would prefer to only allow file-read-metadata,
+; but C programs abort at startup if they cannot read /.
+(read-file "/")
+
+; Devices
+(read-file "/dev")
+(read-file "/dev/autofs_nowait")
+(write-file "/dev/dtracehelper")
+(write-file "/dev/null")
+(write-file "/dev/ptmx")
+(write-file "/dev/random")
+(write-file "/dev/tty")
+(write-file "/dev/urandom")
+(write-file "/dev/zero")
+(read-tree "/dev/fd")
+(allow file-read* file-write* (regex #"^/dev/fd/[0-9][0-9]*$"))
+(allow file-read* file-write* file-ioctl (regex #"^/dev/tty[^/]*$"))
+
+; macOS applications and system files
+(read-tree "/AppleInternal") ; does not exist but programs look
+(read-tree "/Applications")
+(read-tree "/BinaryCache") ; does not exist but programs look
+(read-tree "/BuildSupport") ; does not exist but programs look
+(read-tree "/Library")
+(read-tree "/System")
+
+; Unix applications and system files
+(read-tree "/bin")
+(read-tree "/usr")
+(read-tree "/sbin")
+
+; Unix symlinks into /private TODO stat
+(read-file "/tmp")
+(read-file "/var")
+(read-file "/etc")
+
+; Common additional programs
+(read-tree "/opt/homebrew")
+
+; System files
+(read-tree "/private/etc")
+(read-file "/private/etc/group")
+(read-file "/private/etc/hosts")
+(read-file "/private/etc/passwd")
+(read-tree "/private/var/select")
+(read-file "/private/var/db")
+(read-tree "/private/var/db/timezone")
+
+; Path to $TMPDIR but not the rest of /var
+(with-env TMPDIR
+	(when (and (has-prefix? TMPDIR "/var/folders/mt/") (has-suffix? TMPDIR "/T/"))
+		(read-file "/private") ; TODO stat
+		(read-file "/private/var")
+		(read-file "/private/var/folders")
+		(read-file "/private/var/folders/mt")
+		; Cut /T/ because /C/ is for caches and clang uses it.
+		(write-tree (string-append "/private" (trim-suffix TMPDIR "/T/")))))
+
+; Allow /tmp too.
+(write-tree "/tmp")
+(write-tree "/private/tmp")
+
+; Work directory tree is read-write.
+(with-env BOXROOT
+	(write-tree BOXROOT))
+
+; Allow using locally built Go root.
+(with-env GOROOT
+	(read-tree GOROOT))
+
+; Allow access to GOPATH.
+(with-env GOPATH
+	(stat-file GOPATH)
+	(stat-parents GOPATH)
+	; Installed programs
+	(read-tree (string-append GOPATH "/bin"))
+	; Module cache
+	(write-tree (string-append GOPATH "/pkg")))
+
+; Allow access to limited parts of HOME.
+(with-env HOME
+	; Deny is the default but avoid mistakes anyway.
+	(deny-file (string-append HOME "/.env"))
+	(deny-file (string-append HOME "/.netrc"))
+	(deny-tree (string-append HOME "/.ssh"))
+	; Stat directories up to $HOME, for pwd.
+	(stat-file HOME)
+	(stat-parents HOME)
+	; Every C program seems to read this.
+	(read-file (string-append HOME "/.CFUserTextEncoding"))
+	; Allow reading .gitconfig so git will run.
+	(read-file (string-append HOME "/.gitconfig"))
+	; TODO: rsc's .gitconfig is a symlink to sys/dot. Figure out a better way.
+	(read-tree (string-append HOME "/sys/dot"))
+	; Stat directories up to the files listed below
+	(stat-file (string-append HOME "/Library"))
+	(stat-file (string-append HOME "/Library/Application Support"))
+	; Read but not write 'go env' file.
+	(read-tree (string-append HOME "/Library/Application Support/go"))
+	; Write Go telemetry files
+	(write-tree (string-append HOME "/Library/Application Support/go/telemetry"))
+	; Build caches (Go, Bazel...)
+	(write-tree (string-append HOME "/Library/Caches"))
+	; Downloaded Go toolchains using golang.org/dl/go1.X.Y.
+	(read-tree (string-append HOME "/sdk")))
+
+; Allow access to directory trees listed in $PATH.
+(with-env PATH
+	(map
+		(lambda (p)
+			(when (and (not (equal? p "")) (not (equal? p ".")))
+			(read-tree p)))
+		(string-split PATH #\:)))
