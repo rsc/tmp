@@ -36,7 +36,7 @@ func startWorker(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(exe, "-runmcpworker")
+	cmd := exec.Command("box", exe, "-runmcpworker")
 	cmd.Stderr = os.Stderr
 	transport := &mcp.CommandTransport{
 		Command: cmd,
