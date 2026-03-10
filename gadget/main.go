@@ -61,7 +61,7 @@ var (
 	flagMaxOutput   = flag.Int("maxoutput", -1, "set output limit to `N` tokens (≤ 0 is unlimited)")
 	flagSeed        = flag.Int("seed", -1, "use random seed `N`")
 	flagRot13       = flag.Bool("rot13", false, "enable local rot13 tool")
-	flagWorker      = flag.Bool("worker", false, "enable tools via MCP worker")
+	flagWorker      = flag.Bool("worker", true, "enable tools via sandboxed MCP worker")
 	flagAttach      = flag.String("a", "", "attach `file` to request")
 	flagJSON        = flag.Bool("json", false, "print JSON traces of all messages")
 )
