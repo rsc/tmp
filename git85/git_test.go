@@ -7,7 +7,6 @@ package git85
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"testing"
 )
 
@@ -112,7 +111,7 @@ func TestDecode(t *testing.T) {
 func TestDecoder(t *testing.T) {
 	for _, p := range gitPairs {
 		decoder := NewDecoder(bytes.NewBufferString(p.encoded))
-		dbuf, err := ioutil.ReadAll(decoder)
+		dbuf, err := io.ReadAll(decoder)
 		if err != nil {
 			t.Fatal("Read failed", err)
 		}
@@ -177,9 +176,9 @@ func TestGitBig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encoder.Close() = %v want nil", err)
 	}
-	decoded, err := ioutil.ReadAll(NewDecoder(encoded))
+	decoded, err := io.ReadAll(NewDecoder(encoded))
 	if err != nil {
-		t.Fatalf("ioutil.ReadAll(NewDecoder(...)): %v", err)
+		t.Fatalf("io.ReadAll(NewDecoder(...)): %v", err)
 	}
 
 	if !bytes.Equal(raw, decoded) {

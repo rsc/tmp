@@ -1,7 +1,7 @@
 package main
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 	"strconv"
 )
@@ -11,7 +11,7 @@ func main() {
 	if len(os.Args) > 1 {
 		n, _ = strconv.Atoi(os.Args[1])
 	}
-	data, _ := ioutil.ReadAll(os.Stdin)
+	data, _ := io.ReadAll(os.Stdin)
 	runes := []rune(string(data))
 	for i, r := range runes {
 		if r != '\t' && r != '\n' {

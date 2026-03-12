@@ -26,7 +26,6 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 )
@@ -89,7 +88,7 @@ func main() {
 }
 
 func convert(f *os.File) {
-	data, err := ioutil.ReadAll(f)
+	data, err := io.ReadAll(f)
 	if err != nil {
 		log.Printf("%s: reading: %v", f.Name(), err)
 		exit = 1
