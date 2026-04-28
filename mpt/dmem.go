@@ -242,6 +242,90 @@ func (t *diskTree) setChild(nbit int, childp addr, key Key, val Value) (int, err
 	return b, nil
 }
 
+// Predict returns the hash of the tree that would result from
+// applying the given changes (sorted by key) to the tree,
+// without modifying the tree.
+func (t *diskTree) Predict(changes []KeyValue) (Hash, error) {
+	t.mmu.RLock()
+	defer t.mmu.RUnlock()
+
+	if t.err != nil {
+		return Hash{}, t.err
+	}
+	if t.hdr().dirty() {
+		return Hash{}, ErrModifiedTree
+	}
+
+	s, list, err := t.predict([]node{}, t.hdr().root(), -1, changes)
+	if err != nil {
+		return Hash{}, err
+	}
+	for _, kv := range list {
+		s = reduce(append(s, node{prefix(kv.Key, 256), hashLeaf(kv.Key, kv.Val)}))
+	}
+	return hashStack(s), nil
+}
+
+// predict calculates the edited tree hash for the subtree at address a.
+func (t *diskTree) predict(s []node, a addr, pbit int, list []KeyValue) ([]node, []KeyValue, error) {
+	if a == 0 {
+		return s, list, nil
+	}
+
+	n, err := t.node(a)
+	if err != nil {
+		return nil, nil, err
+	}
+	key, val, err := n.keyVal(t)
+	if err != nil {
+		return nil, nil, err
+	}
+	nbit := n.bit()
+	bits := nbit
+	if nbit <= pbit {
+		bits = 256
+	}
+	pkey := prefix(key, bits)
+
+	// Stack modifications before node.
+	for len(list) > 0 && prefix(list[0].Key, bits).compare(pkey) < 0 {
+		k, v := list[0].Key, list[0].Val
+		list = list[1:]
+		s = reduce(append(s, node{prefix(k, 256), hashLeaf(k, v)}))
+	}
+
+	// Stack leaf node, possibly replaced.
+	if bits == 256 {
+		if len(list) > 0 && list[0].Key == key {
+			val = list[0].Val
+			list = list[1:]
+		}
+		s = reduce(append(s, node{pkey, hashLeaf(key, val)}))
+		return s, list, nil
+	}
+
+	// Stack entire subtree, if no modifications inside it.
+	if len(list) == 0 || pkey.compare(prefix(list[0].Key, bits)) < 0 {
+		h, err := n.hash(t, pbit)
+		if err != nil {
+			return nil, nil, err
+		}
+		s = reduce(append(s, node{pkey, h}))
+		return s, list, nil
+	}
+
+	// Otherwise, apply modifications within subtree.
+	s, list, err = t.predict(s, n.left(), nbit, list)
+	if err != nil {
+		return nil, nil, err
+	}
+	s, list, err = t.predict(s, n.right(), nbit, list)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s, list, nil
+}
+
 // Prove returns a proof of the presence or absence of key in t.
 func (t *diskTree) Prove(key Key) (Proof, error) {
 	t.mmu.RLock()

@@ -12,6 +12,7 @@ import (
 	"io"
 	"math/rand"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -122,24 +123,22 @@ func TestAllTrees(t *testing.T) {
 				}
 				for leaves := range 1 << N {
 					tt := newTree(t)
-					var keys []Key
-					var vals []Value
+					var kvs []KeyValue
 					for i := range N {
 						if leaves&(1<<i) != 0 {
-							keys = append(keys, k(i))
-							vals = append(vals, v(i))
+							kvs = append(kvs, KeyValue{k(i), v(i)})
 						}
 					}
-					for _, i := range rand.Perm(len(keys)) {
-						tt.set(keys[i], vals[i])
+					for _, i := range rand.Perm(len(kvs)) {
+						tt.set(kvs[i].Key, kvs[i].Val)
 					}
 
 					e := 1
-					if len(keys) == 0 {
+					if len(kvs) == 0 {
 						e = 0
 					}
 					for round := range 3 {
-						tt.snap(int64(e*(1+round)), rootHash(keys, vals))
+						tt.snap(int64(e*(1+round)), rootHash(kvs))
 						for i := range N {
 							if leaves&(1<<i) != 0 {
 								tt.get(k(i), v(i+N*round), true)
@@ -147,14 +146,12 @@ func TestAllTrees(t *testing.T) {
 								tt.get(k(i), Value{}, false)
 							}
 						}
-						keys = keys[:0]
-						vals = vals[:0]
+						kvs = kvs[:0]
 						for i := range N {
 							if leaves&(1<<i) != 0 {
 								val := v(i + N*(round+1))
 								tt.set(k(i), val)
-								keys = append(keys, k(i))
-								vals = append(vals, val)
+								kvs = append(kvs, KeyValue{k(i), val})
 							}
 						}
 					}
@@ -163,6 +160,77 @@ func TestAllTrees(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestPredictRandom(t *testing.T) {
+	testImpls(t, func(t *testing.T, newTree func(*testing.T) *testTree) {
+		const N = 50
+		for iter := range 10 {
+			t.Run(fmt.Sprint(iter), func(t *testing.T) {
+				tt := newTree(t)
+				defer tt.tree.Close()
+
+				// Build random tree.
+				var init []KeyValue
+				for i := range N {
+					init = append(init, KeyValue{sha(fmt.Sprintf("key-%d-%d", iter, i)), v(i)})
+				}
+				for _, kv := range init {
+					tt.set(kv.Key, kv.Val)
+				}
+				tt.tree.Snap(1)
+
+				// Choose random edits, using map to dedup keys.
+				update := make(map[Key]Value)
+				for i := range 10 {
+					var k Key
+					if i%2 == 0 {
+						// Edit existing
+						k = init[rand.Intn(N)].Key
+					} else {
+						// New key
+						k = sha(fmt.Sprintf("newkey-%d-%d", iter, i))
+					}
+					v := sha(fmt.Sprintf("val-%d-%d", iter, i))
+					update[k] = v
+				}
+
+				// Sort edits.
+				var edits []KeyValue
+				for key, val := range update {
+					edits = append(edits, KeyValue{key, val})
+				}
+				slices.SortFunc(edits, KeyValue.compare)
+
+				// Predict.
+				hash, err := tt.tree.Predict(edits)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				// Check against applying to tree.
+				for _, kv := range edits {
+					tt.set(kv.Key, kv.Val)
+				}
+				want, err := tt.tree.Snap(2)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if hash != want.Hash {
+					t.Fatalf("Iter %d: Predict = %v, want %v", iter, hash, want.Hash)
+				}
+			})
+		}
+	})
+}
+
+func rootHash(kvs []KeyValue) Hash {
+	var s []node
+	for _, kv := range kvs {
+		s = reduce(append(s, node{prefix(kv.Key, keyBits), hashLeaf(kv.Key, kv.Val)}))
+	}
+	return hashStack(s)
 }
 
 func h(x string) [32]byte {
@@ -358,4 +426,34 @@ func benchmarkProof(b *testing.B, tree Tree, treeSize int) {
 		}
 		_ = proof
 	}
+}
+
+func TestPredict(t *testing.T) {
+	testImpls(t, func(t *testing.T, newTree func(*testing.T) *testTree) {
+		tt := newTree(t)
+		defer tt.tree.Close()
+		tt.set(h("0...0"), v(1))
+		tt.set(h("40...0"), v(2))
+		tt.set(h("80...0"), v(3))
+		tt.tree.Snap(1)
+
+		hash, err := tt.tree.Predict([]KeyValue{
+			{Key: h("20...0"), Val: v(4)},
+			{Key: h("40...0"), Val: v(5)},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		want := rootHash([]KeyValue{
+			{h("0...0"), v(1)},
+			{h("20...0"), v(4)},
+			{h("40...0"), v(5)},
+			{h("80...0"), v(3)},
+		})
+
+		if hash != want {
+			t.Errorf("Predict = %v, want %v", hash, want)
+		}
+	})
 }

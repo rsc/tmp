@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/bits"
 )
 
@@ -23,6 +24,15 @@ type Tree interface {
 	// concurrently with any other Tree method calls
 	// (including other calls to Set).
 	Set(key Key, val Value) error
+
+	// Predict returns the hash of the tree that would result from
+	// applying the given changes (sorted by key) to the tree,
+	// without modifying the tree.
+	//
+	// It is an error to call Predict if Set has been called without
+	// a subsequent call to Snap: in that case, the caller does not
+	// know what the current hash is.
+	Predict(changes []KeyValue) (Hash, error)
 
 	// Snap sets the tree's version number and returns the current tree snapshot.
 	//
@@ -106,12 +116,74 @@ func (p Key) overlap(q Key) int {
 	return 256
 }
 
+// compare returns the result of comparing two keys.
+func (k Key) compare(q Key) int {
+	return bytes.Compare(k[:], q[:])
+}
+
 // A Value is a value stored in a Tree.
 // It is usually a cryptographic hash of the actual value data.
 type Value [32]byte
 
 func (v Value) String() string {
 	return hex.EncodeToString(v[:])
+}
+
+// A KeyValue is a key-value pair.
+type KeyValue struct {
+	Key Key
+	Val Value
+}
+
+func (kv KeyValue) compare(other KeyValue) int {
+	return kv.Key.compare(other.Key)
+}
+
+// A keyPrefix is a prefix of a key, identifying a specific node.
+type keyPrefix struct {
+	// bits is the prefix length in bits (0..256, inclusive).
+	bits int
+
+	// full is the key prefix bytes, zero-padded on the right.
+	full Key
+}
+
+func (p keyPrefix) String() string {
+	return fmt.Sprintf("%x/%d", p.full[:(p.bits+7)/8], p.bits)
+}
+
+// overlap returns the number of leading bits p and q have in common.
+func (p keyPrefix) overlap(q keyPrefix) int {
+	return min(p.bits, q.bits, p.full.overlap(q.full))
+}
+
+func (p keyPrefix) truncate(bits int) keyPrefix {
+	p.bits = bits
+	clear(p.full[(bits+7)/8:])
+	if n := bits & 7; n != 0 {
+		p.full[bits/8] &= 0xFF << (8 - n)
+	}
+	return p
+}
+
+func (p keyPrefix) compare(q keyPrefix) int {
+	return bytes.Compare(p.full[:], q.full[:])
+}
+
+func prefix(key Key, bits int) keyPrefix {
+	p := keyPrefix{bits: bits, full: key}
+	return p.truncate(bits)
+}
+
+// A node represents the metadata for a single node.
+type node struct {
+	key  keyPrefix
+	hash Hash
+}
+
+func (x node) merge(y node) node {
+	b := x.key.overlap(y.key)
+	return node{x.key.truncate(b), hashInner(b, x.hash, y.hash)}
 }
 
 // A Snapshot is a cryptographic snapshot of a Tree at a point in time.
@@ -259,4 +331,22 @@ func hashInner(b int, left, right Hash) Hash {
 	}
 	// fmt.Printf("hashInner %v %v %d -> %x\n", left, right, bits, h[:])
 	return h
+}
+
+func reduce(s []node) []node {
+	for len(s) >= 3 && s[len(s)-3].key.overlap(s[len(s)-2].key) > s[len(s)-2].key.overlap(s[len(s)-1].key) {
+		m := s[len(s)-3].merge(s[len(s)-2])
+		s = append(s[:len(s)-3], m, s[len(s)-1])
+	}
+	return s
+}
+
+func hashStack(s []node) Hash {
+	if len(s) == 0 {
+		return emptyTreeHash()
+	}
+	for len(s) >= 2 {
+		s = append(s[:len(s)-2], s[len(s)-2].merge(s[len(s)-1]))
+	}
+	return s[0].hash
 }

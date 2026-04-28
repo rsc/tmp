@@ -181,6 +181,66 @@ func setChild(nbit int, child **memNode, key Key, val Value) int {
 	return b
 }
 
+// Predict returns the hash of the tree that would result from
+// applying the given changes (sorted by key) to the tree,
+// without modifying the tree.
+func (t *memTree) Predict(changes []KeyValue) (Hash, error) {
+	if t.err != nil {
+		return Hash{}, t.err
+	}
+	if t.dirty {
+		return Hash{}, ErrModifiedTree
+	}
+
+	s, list := t.predict([]node{}, t.root, -1, changes)
+	for _, kv := range list {
+		s = reduce(append(s, node{prefix(kv.Key, 256), hashLeaf(kv.Key, kv.Val)}))
+	}
+	return hashStack(s), nil
+}
+
+func (t *memTree) predict(s []node, n *memNode, pbit int, list []KeyValue) ([]node, []KeyValue) {
+	if n == nil {
+		return s, list
+	}
+	key, val := n.key, n.val
+	nbit := n.bit()
+	bits := nbit
+	if nbit <= pbit {
+		bits = 256
+	}
+	pkey := prefix(key, bits)
+
+	// Stack modifications before node.
+	for len(list) > 0 && prefix(list[0].Key, bits).compare(pkey) < 0 {
+		k, v := list[0].Key, list[0].Val
+		list = list[1:]
+		s = reduce(append(s, node{prefix(k, 256), hashLeaf(k, v)}))
+	}
+
+	// Stack leaf node, possibly replaced.
+	if bits == 256 {
+		if len(list) > 0 && list[0].Key == key {
+			val = list[0].Val
+			list = list[1:]
+		}
+		s = reduce(append(s, node{pkey, hashLeaf(key, val)}))
+		return s, list
+	}
+
+	// Stack entire subtree, if no modifications inside it.
+	if len(list) == 0 || pkey.compare(prefix(list[0].Key, bits)) < 0 {
+		h := n.hash(pbit)
+		s = reduce(append(s, node{pkey, h}))
+		return s, list
+	}
+
+	// Otherwise, apply modifications within subtree.
+	s, list = t.predict(s, n.left, nbit, list)
+	s, list = t.predict(s, n.right, nbit, list)
+	return s, list
+}
+
 // Prove returns a proof of the presence or absence of key in t.
 func (t *memTree) Prove(key Key) (Proof, error) {
 	if t.err != nil {
