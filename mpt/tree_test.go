@@ -99,7 +99,7 @@ func TestGoldenTrees(t *testing.T) {
 					tt.get(k, v(i), true)
 				}
 				for _, k := range missing {
-					tt.get(k, Value{}, false)
+					tt.get(k, Val{}, false)
 				}
 			})
 		}
@@ -143,7 +143,7 @@ func TestAllTrees(t *testing.T) {
 							if leaves&(1<<i) != 0 {
 								tt.get(k(i), v(i+N*round), true)
 							} else {
-								tt.get(k(i), Value{}, false)
+								tt.get(k(i), Val{}, false)
 							}
 						}
 						kvs = kvs[:0]
@@ -181,7 +181,7 @@ func TestPredictRandom(t *testing.T) {
 				tt.tree.Snap(1)
 
 				// Choose random edits, using map to dedup keys.
-				update := make(map[Key]Value)
+				update := make(map[Key]Val)
 				for i := range 10 {
 					var k Key
 					if i%2 == 0 {
@@ -260,7 +260,7 @@ func enc(list ...any) []byte {
 			out = append(out, item[:]...)
 		case Key:
 			out = append(out, item[:]...)
-		case Value:
+		case Val:
 			out = append(out, item[:]...)
 		case Hash:
 			out = append(out, item[:]...)
@@ -309,7 +309,7 @@ func testDiskTree(t *testing.T) *testTree {
 	return &testTree{t: t, tree: newDiskTree()}
 }
 
-func (tt *testTree) set(key Key, val Value) {
+func (tt *testTree) set(key Key, val Val) {
 	err := tt.tree.Set(key, val)
 	if err != nil {
 		tt.t.Fatalf("Set %v: %v\n\nLog:\n%s", key, err, &tt.log)
@@ -330,7 +330,7 @@ func (tt *testTree) snap(version int64, hash Hash) {
 	fmt.Fprintf(&tt.log, "snap(%d) = %v\n", version, hash)
 }
 
-func (tt *testTree) get(key Key, val Value, ok bool) {
+func (tt *testTree) get(key Key, val Val, ok bool) {
 	tt.t.Helper()
 
 	defer func() {
@@ -390,7 +390,7 @@ func benchmarkSet(b *testing.B, tree Tree, n, treeSize int) {
 	for b.Loop() {
 		//	tree1 := *tree
 		for _, kv := range todo {
-			tree.Set(Key(kv[0]), Value(kv[1]))
+			tree.Set(Key(kv[0]), Val(kv[1]))
 		}
 		tree.Snap(2)
 	}

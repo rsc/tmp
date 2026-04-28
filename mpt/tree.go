@@ -23,7 +23,7 @@ type Tree interface {
 	// Set is a mutating operation and must not be called
 	// concurrently with any other Tree method calls
 	// (including other calls to Set).
-	Set(key Key, val Value) error
+	Set(key Key, val Val) error
 
 	// Predict returns the hash of the tree that would result from
 	// applying the given changes (sorted by key) to the tree,
@@ -121,18 +121,24 @@ func (k Key) compare(q Key) int {
 	return bytes.Compare(k[:], q[:])
 }
 
-// A Value is a value stored in a Tree.
-// It is usually a cryptographic hash of the actual value data.
-type Value [32]byte
+// Value is the old name for Val.
+// Run “go fix” to update client code to use Val instead of Value.
+//
+//go:fix inline
+type Value = Val
 
-func (v Value) String() string {
+// A Val is a value stored in a Tree.
+// It is usually a cryptographic hash of the actual value data.
+type Val [32]byte
+
+func (v Val) String() string {
 	return hex.EncodeToString(v[:])
 }
 
 // A KeyValue is a key-value pair.
 type KeyValue struct {
 	Key Key
-	Val Value
+	Val Val
 }
 
 func (kv KeyValue) compare(other KeyValue) int {
@@ -258,24 +264,24 @@ var (
 // Verify verifies that p is a valid proof of a lookup for key in snap,
 // returning the proved lookup result (val, ok).
 // If the proof is not valid for key in snap, Verify returns a non-nil error.
-func Verify(snap Snapshot, key Key, proof Proof) (val Value, ok bool, err error) {
+func Verify(snap Snapshot, key Key, proof Proof) (val Val, ok bool, err error) {
 	//fmt.Printf("Verify %v %x\n", key, proof)
 	if string(proof) == proofEmpty {
 		if snap.Hash == emptyTreeHash() {
-			return Value{}, false, nil
+			return Val{}, false, nil
 		}
-		return Value{}, false, ErrMismatchedProof
+		return Val{}, false, ErrMismatchedProof
 	}
 
 	var data []byte
 	var pkey Key
 	if data, ok = bytes.CutPrefix(proof, []byte(proofConfirm)); ok && len(data) >= 32 {
 		pkey = key
-		val, data = Value(data[:32]), data[32:]
+		val, data = Val(data[:32]), data[32:]
 	} else if data, ok = bytes.CutPrefix(proof, []byte(proofDeny)); ok && len(data) >= 64 {
-		pkey, val, data = Key(data[:32]), Value(data[32:64]), data[64:]
+		pkey, val, data = Key(data[:32]), Val(data[32:64]), data[64:]
 		if pkey == key {
-			return Value{}, false, ErrMalformedProof
+			return Val{}, false, ErrMalformedProof
 		}
 	}
 	h := hashLeaf(pkey, val)
@@ -284,7 +290,7 @@ func Verify(snap Snapshot, key Key, proof Proof) (val Value, ok bool, err error)
 		var sib Hash
 		b, sib, data = int(data[0]), Hash(data[1:1+32]), data[1+32:]
 		if key.bit(b) != pkey.bit(b) {
-			return Value{}, false, ErrMalformedProof
+			return Val{}, false, ErrMalformedProof
 		}
 		if key.bit(b) == 0 {
 			h = hashInner(b, h, sib)
@@ -293,12 +299,12 @@ func Verify(snap Snapshot, key Key, proof Proof) (val Value, ok bool, err error)
 		}
 	}
 	if len(data) != 0 || h != snap.Hash {
-		return Value{}, false, ErrMalformedProof
+		return Val{}, false, ErrMalformedProof
 	}
 	if pkey == key {
 		return val, true, nil
 	}
-	return Value{}, false, nil
+	return Val{}, false, nil
 }
 
 // emptyTreeHash returns the parent hash for a root no child nodes.
@@ -309,7 +315,7 @@ func emptyTreeHash() Hash {
 }
 
 // hashLeaf returns the hash of a leaf with a given key and value.
-func hashLeaf(key Key, val Value) Hash {
+func hashLeaf(key Key, val Val) Hash {
 	var kv [64]byte
 	copy(kv[:32], key[:])
 	copy(kv[32:64], val[:])

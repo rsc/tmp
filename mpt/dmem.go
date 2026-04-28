@@ -118,7 +118,7 @@ func (t *diskTree) Version() (version int64, exact bool) {
 }
 
 // Set sets the value associated with key to val.
-func (t *diskTree) Set(key Key, val Value) error {
+func (t *diskTree) Set(key Key, val Val) error {
 	t.mmu.RLock()
 	defer t.mmu.RUnlock()
 
@@ -178,7 +178,7 @@ func (t *diskTree) Set(key Key, val Value) error {
 	return nil
 }
 
-func (n *diskNode) set(t *diskTree, pbit int, key Key, val Value) (int, error) {
+func (n *diskNode) set(t *diskTree, pbit int, key Key, val Val) (int, error) {
 	nbit := n.bit()
 	if nbit <= pbit {
 		// view n as leaf
@@ -213,7 +213,7 @@ func (n *diskNode) set(t *diskTree, pbit int, key Key, val Value) (int, error) {
 	return b, nil
 }
 
-func (t *diskTree) setChild(nbit int, childp addr, key Key, val Value) (int, error) {
+func (t *diskTree) setChild(nbit int, childp addr, key Key, val Val) (int, error) {
 	child, err := t.node(t.addrAt(childp))
 	if err != nil {
 		return 0, err

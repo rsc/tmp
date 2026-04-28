@@ -451,9 +451,9 @@ func (n *diskNode) leafAddr(t *diskTree) int64 {
 func (n *diskNode) keyVal(t *diskTree) (Key, Value, error) {
 	var kv [leafSize]byte
 	if err := t.pmem.ReadDisk(kv[:], n.leafAddr(t)); err != nil {
-		return Key{}, Value{}, err
+		return Key{}, Val{}, err
 	}
-	return Key(kv[:]), Value(kv[len(Key{}):]), nil
+	return Key(kv[:]), Val(kv[len(Key{}):]), nil
 }
 
 func (n *diskNode) dirty() bool { return n[nodeDirty] != 0 }
@@ -473,7 +473,7 @@ func (n *diskNode) bit() int {
 
 // init initializes the node n with the given key, val, bit, left, and right;
 // it also sets dirty=true and clears ihash.
-func (n *diskNode) init(t *diskTree, key Key, val Value, bit int, left, right *diskNode) error {
+func (n *diskNode) init(t *diskTree, key Key, val Val, bit int, left, right *diskNode) error {
 	var buf [nodeSize]byte
 	buf[nodeUbit] = byte(bit)
 	buf[nodeDirty] = 1
@@ -492,7 +492,7 @@ func (n *diskNode) init(t *diskTree, key Key, val Value, bit int, left, right *d
 	return nil
 }
 
-func (n *diskNode) setVal(t *diskTree, val Value) error {
+func (n *diskNode) setVal(t *diskTree, val Val) error {
 	off := n.leafAddr(t) + int64(len(Key{}))
 	if err := t.pmem.WriteDisk(val[:], off); err != nil {
 		return t.broken(err)

@@ -23,7 +23,7 @@ type memTree struct {
 // A memNode is a single node in the in-memory tree.
 type memNode struct {
 	key   Key
-	val   Value
+	val   Val
 	ihash Hash
 	dirty bool // needs rehashing
 	ubit  byte
@@ -116,7 +116,7 @@ func (t *memTree) Snap(version int64) (Snapshot, error) {
 }
 
 // Set sets the value associated with key to val.
-func (t *memTree) Set(key Key, val Value) error {
+func (t *memTree) Set(key Key, val Val) error {
 	if t.err != nil {
 		return t.err
 	}
@@ -133,7 +133,7 @@ func (t *memTree) Set(key Key, val Value) error {
 	return nil
 }
 
-func (n *memNode) set(pbit int, key Key, val Value) int {
+func (n *memNode) set(pbit int, key Key, val Val) int {
 	if n.bit() <= pbit {
 		// view n as leaf
 		b := n.key.overlap(key)
@@ -157,7 +157,7 @@ func (n *memNode) set(pbit int, key Key, val Value) int {
 	return b
 }
 
-func setChild(nbit int, child **memNode, key Key, val Value) int {
+func setChild(nbit int, child **memNode, key Key, val Val) int {
 	b := (*child).set(nbit, key, val)
 	if nbit < b {
 		n := new(memNode)
