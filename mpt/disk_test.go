@@ -289,6 +289,7 @@ func testDiskRecovery(t *testing.T) {
 		case 3:
 			t.Log("sync")
 			check(t, tree.Sync())
+			_, exact = tree.Version()
 			syncVersion = version
 			syncExact = exact
 			clear(tt.valid)
