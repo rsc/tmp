@@ -136,12 +136,6 @@ func (v Val) String() string {
 	return hex.EncodeToString(v[:])
 }
 
-// KeyValue is the old name for KeyVal.
-// Run “go fix” to update client code to use KeyVal instead of KeyValue.
-//
-//go:fix inline
-type KeyValue = KeyVal
-
 // KeyVal is a key-value pair.
 type KeyVal struct {
 	Key Key
