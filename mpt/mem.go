@@ -184,7 +184,7 @@ func setChild(nbit int, child **memNode, key Key, val Val) int {
 // Predict returns the hash of the tree that would result from
 // applying the given changes (sorted by key) to the tree,
 // without modifying the tree.
-func (t *memTree) Predict(changes []KeyValue) (Hash, error) {
+func (t *memTree) Predict(changes []KeyVal) (Hash, error) {
 	if t.err != nil {
 		return Hash{}, t.err
 	}
@@ -199,7 +199,7 @@ func (t *memTree) Predict(changes []KeyValue) (Hash, error) {
 	return hashStack(s), nil
 }
 
-func (t *memTree) predict(s []node, n *memNode, pbit int, list []KeyValue) ([]node, []KeyValue) {
+func (t *memTree) predict(s []node, n *memNode, pbit int, list []KeyVal) ([]node, []KeyVal) {
 	if n == nil {
 		return s, list
 	}

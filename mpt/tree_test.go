@@ -123,10 +123,10 @@ func TestAllTrees(t *testing.T) {
 				}
 				for leaves := range 1 << N {
 					tt := newTree(t)
-					var kvs []KeyValue
+					var kvs []KeyVal
 					for i := range N {
 						if leaves&(1<<i) != 0 {
-							kvs = append(kvs, KeyValue{k(i), v(i)})
+							kvs = append(kvs, KeyVal{k(i), v(i)})
 						}
 					}
 					for _, i := range rand.Perm(len(kvs)) {
@@ -138,7 +138,7 @@ func TestAllTrees(t *testing.T) {
 						e = 0
 					}
 					for round := range 3 {
-						tt.snap(int64(e*(1+round)), rootHash(kvs))
+						tt.snap(int64(e*(1+round)), TreeHash(slices.Values(kvs)))
 						for i := range N {
 							if leaves&(1<<i) != 0 {
 								tt.get(k(i), v(i+N*round), true)
@@ -151,7 +151,7 @@ func TestAllTrees(t *testing.T) {
 							if leaves&(1<<i) != 0 {
 								val := v(i + N*(round+1))
 								tt.set(k(i), val)
-								kvs = append(kvs, KeyValue{k(i), val})
+								kvs = append(kvs, KeyVal{k(i), val})
 							}
 						}
 					}
@@ -171,9 +171,9 @@ func TestPredictRandom(t *testing.T) {
 				defer tt.tree.Close()
 
 				// Build random tree.
-				var init []KeyValue
+				var init []KeyVal
 				for i := range N {
-					init = append(init, KeyValue{sha(fmt.Sprintf("key-%d-%d", iter, i)), v(i)})
+					init = append(init, KeyVal{sha(fmt.Sprintf("key-%d-%d", iter, i)), v(i)})
 				}
 				for _, kv := range init {
 					tt.set(kv.Key, kv.Val)
@@ -196,11 +196,11 @@ func TestPredictRandom(t *testing.T) {
 				}
 
 				// Sort edits.
-				var edits []KeyValue
+				var edits []KeyVal
 				for key, val := range update {
-					edits = append(edits, KeyValue{key, val})
+					edits = append(edits, KeyVal{key, val})
 				}
-				slices.SortFunc(edits, KeyValue.compare)
+				slices.SortFunc(edits, KeyVal.Compare)
 
 				// Predict.
 				hash, err := tt.tree.Predict(edits)
@@ -225,14 +225,6 @@ func TestPredictRandom(t *testing.T) {
 	})
 }
 
-func rootHash(kvs []KeyValue) Hash {
-	var s []node
-	for _, kv := range kvs {
-		s = reduce(append(s, node{prefix(kv.Key, keyBits), hashLeaf(kv.Key, kv.Val)}))
-	}
-	return hashStack(s)
-}
-
 func h(x string) [32]byte {
 	if l, r, ok := strings.Cut(x, "..."); ok && l != "" && r != "" && l[len(l)-1] == r[0] {
 		x = l + strings.Repeat(r[0:1], 64-len(l)-len(r)) + r
@@ -244,7 +236,7 @@ func h(x string) [32]byte {
 	return [32]byte(h)
 }
 
-func v(i int) Value {
+func v(i int) Val {
 	return h(fmt.Sprintf("42%062x", i))
 }
 
@@ -437,7 +429,7 @@ func TestPredict(t *testing.T) {
 		tt.set(h("80...0"), v(3))
 		tt.tree.Snap(1)
 
-		hash, err := tt.tree.Predict([]KeyValue{
+		hash, err := tt.tree.Predict([]KeyVal{
 			{Key: h("20...0"), Val: v(4)},
 			{Key: h("40...0"), Val: v(5)},
 		})
@@ -445,12 +437,12 @@ func TestPredict(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		want := rootHash([]KeyValue{
+		want := TreeHash(slices.Values([]KeyVal{
 			{h("0...0"), v(1)},
 			{h("20...0"), v(4)},
 			{h("40...0"), v(5)},
 			{h("80...0"), v(3)},
-		})
+		}))
 
 		if hash != want {
 			t.Errorf("Predict = %v, want %v", hash, want)

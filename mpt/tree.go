@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"iter"
 	"math/bits"
 )
 
@@ -32,7 +33,7 @@ type Tree interface {
 	// It is an error to call Predict if Set has been called without
 	// a subsequent call to Snap: in that case, the caller does not
 	// know what the current hash is.
-	Predict(changes []KeyValue) (Hash, error)
+	Predict(changes []KeyVal) (Hash, error)
 
 	// Snap sets the tree's version number and returns the current tree snapshot.
 	//
@@ -116,8 +117,8 @@ func (p Key) overlap(q Key) int {
 	return 256
 }
 
-// compare returns the result of comparing two keys.
-func (k Key) compare(q Key) int {
+// Compare returns the result of comparing two keys.
+func (k Key) Compare(q Key) int {
 	return bytes.Compare(k[:], q[:])
 }
 
@@ -135,14 +136,22 @@ func (v Val) String() string {
 	return hex.EncodeToString(v[:])
 }
 
-// A KeyValue is a key-value pair.
-type KeyValue struct {
+// KeyValue is the old name for KeyVal.
+// Run “go fix” to update client code to use KeyVal instead of KeyValue.
+//
+//go:fix inline
+type KeyValue = KeyVal
+
+// KeyVal is a key-value pair.
+type KeyVal struct {
 	Key Key
 	Val Val
 }
 
-func (kv KeyValue) compare(other KeyValue) int {
-	return kv.Key.compare(other.Key)
+// Compare returns the result of comparing keys kv.Key and other.Key.
+// It ignores the Val fields.
+func (kv KeyVal) Compare(other KeyVal) int {
+	return kv.Key.Compare(other.Key)
 }
 
 // A keyPrefix is a prefix of a key, identifying a specific node.
@@ -211,6 +220,23 @@ type Hash [32]byte
 
 func (h Hash) String() string {
 	return hex.EncodeToString(h[:])
+}
+
+// TreeHash computes the snapshot hash of a tree consisting of
+// the sequence of key-value items.
+//
+// The sequence must be sorted by increasing
+// key value (such as by [Key.Compare] or [KeyVal.Compare]),
+// and a key cannot appear multiple times in the list.
+// TreeHash panics if the sequence is not sorted or a key appears twice.
+//
+// Use [slices.Values] to apply TreeHash to a slice of KeyVal.
+func TreeHash(seq iter.Seq[KeyVal]) Hash {
+	var s []node
+	for kv := range seq {
+		s = reduce(append(s, node{prefix(kv.Key, keyBits), hashLeaf(kv.Key, kv.Val)}))
+	}
+	return hashStack(s)
 }
 
 // A Proof is a proof of the result of looking up a target key in a

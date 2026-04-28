@@ -448,7 +448,7 @@ func (n *diskNode) leafAddr(t *diskTree) int64 {
 	return int64(leafSize * ((t.addr(n) - hdrSize) / nodeSize))
 }
 
-func (n *diskNode) keyVal(t *diskTree) (Key, Value, error) {
+func (n *diskNode) keyVal(t *diskTree) (Key, Val, error) {
 	var kv [leafSize]byte
 	if err := t.pmem.ReadDisk(kv[:], n.leafAddr(t)); err != nil {
 		return Key{}, Val{}, err

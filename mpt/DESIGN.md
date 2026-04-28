@@ -173,7 +173,7 @@ Proofs are variable length strings beginning with the 8-byte sequence `mptproof`
 
 In Go the verifier's signature is:
 
-	func Verify(snap Snapshot, key Key, proof Proof) (val Value, ok bool, err error)
+	func Verify(snap Snapshot, key Key, proof Proof) (val Val, ok bool, err error)
 
 The verifier is given a tree hash (called a snapshot), a specific key, and a proof,
 and it returns three results: (1) the value associated with the key,

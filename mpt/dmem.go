@@ -245,7 +245,7 @@ func (t *diskTree) setChild(nbit int, childp addr, key Key, val Val) (int, error
 // Predict returns the hash of the tree that would result from
 // applying the given changes (sorted by key) to the tree,
 // without modifying the tree.
-func (t *diskTree) Predict(changes []KeyValue) (Hash, error) {
+func (t *diskTree) Predict(changes []KeyVal) (Hash, error) {
 	t.mmu.RLock()
 	defer t.mmu.RUnlock()
 
@@ -267,7 +267,7 @@ func (t *diskTree) Predict(changes []KeyValue) (Hash, error) {
 }
 
 // predict calculates the edited tree hash for the subtree at address a.
-func (t *diskTree) predict(s []node, a addr, pbit int, list []KeyValue) ([]node, []KeyValue, error) {
+func (t *diskTree) predict(s []node, a addr, pbit int, list []KeyVal) ([]node, []KeyVal, error) {
 	if a == 0 {
 		return s, list, nil
 	}
