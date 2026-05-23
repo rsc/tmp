@@ -96,7 +96,7 @@ import (
 )
 
 var (
-	startTextRE = regexp.MustCompile(`^(""\.[^ ]+) t=([^ ]+) size=([^ ]+) (?:value=[^ ]+ )?args=([^ ]+) locals=([^ ]+)$`)
+	startTextRE = regexp.MustCompile(`^(""\.[^ ]+) STEXT.* size=([^ ]+) args=([^ ]+) locals=([^ ]+) funcid=([^ ]+)$`)
 	startDataRE = regexp.MustCompile(`^([^ ]+) t=([^ ]+) size=([^ ]+)$`)
 	instRE      = regexp.MustCompile(`^\t(0x[0-9a-f]+) 0*(0|[1-9][0-9]*) \(([^\t]+:[0-9]+)\)\t([A-Z0-9].*)$`)
 )
@@ -129,7 +129,7 @@ func main() {
 	if *symFlag != "" {
 		re, err := regexp.Compile(*symFlag)
 		if err != nil {
-			log.Fatal("invalid -s regexp: %s", err)
+			log.Fatalf("invalid -s regexp: %s", err)
 		}
 		symRE = re
 	}
@@ -212,7 +212,7 @@ type Inst struct {
 var haveFuncdataH = false
 
 var (
-	textRE        = regexp.MustCompile(`TEXT.*\(SB\), \$([0-9]+)-([0-9]+)$`)
+	textRE        = regexp.MustCompile(`TEXT.*\(SB\), ABIInternal, \$([0-9]+)-([0-9]+)$`)
 	flt64RE       = regexp.MustCompile(`\$f64\.[0-9a-f]{16}\(SB\)`)
 	spRE          = regexp.MustCompile(`\+[0-9]+\((FP|SP)\)`)
 	stackPkgRE    = regexp.MustCompile(`""\.([^ ,\t]+)\+[0-9]+\((SP|FP)\)`)
@@ -230,7 +230,7 @@ func asmText(text []Inst) {
 		cutBP           bool
 	)
 
-	pkgPrefix := strings.Replace(strings.Replace(pathtoprefix(pkg)+".", "/", "∕", -1), ".", "·", -1)
+	pkgPrefix := strings.ReplaceAll(strings.ReplaceAll(pathtoprefix(pkg)+".", "/", "∕"), ".", "·")
 
 	for i := range text {
 		inst := &text[i]
@@ -318,7 +318,7 @@ func asmText(text []Inst) {
 		})
 
 		// In global variable names, replace "". with assembler prefix (e.g., "math·").
-		inst.Asm = strings.Replace(inst.Asm, `"".`, pkgPrefix, -1)
+		inst.Asm = strings.ReplaceAll(inst.Asm, `"".`, pkgPrefix)
 
 		// Rewrite x+N(SP) and x+N(FP) to be in assembler form.
 		// By default the compiler prints N = the exact offset from the real SP.
