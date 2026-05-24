@@ -355,13 +355,12 @@ func (n *diskNode) prove(t *diskTree, pbit int, key Key) (Proof, error) {
 		if err != nil {
 			return nil, err
 		}
-		var p Proof
 		if nkey == key {
-			p = Proof(proofConfirm)
+			return Proof(proofConfirm), nil
 		} else {
-			p = append(Proof(proofDeny), nkey[:]...)
+			p := append(Proof(proofDeny), nkey[:]...)
+			return append(p, nval[:]...), nil
 		}
-		return append(p, nval[:]...), nil
 	}
 
 	childAddr, sibAddr := n.left(), n.right()

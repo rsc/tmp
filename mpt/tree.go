@@ -352,7 +352,7 @@ func VerifyNoninclusion(snap Snapshot, key Key, proof Proof) (err error) {
 	}
 
 	data, ok := bytes.CutPrefix(proof, []byte(proofDeny))
-	if !ok || len(data) <= 64 {
+	if !ok || len(data) < 64 {
 		return ErrMalformedProof
 	}
 
