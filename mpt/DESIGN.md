@@ -185,9 +185,9 @@ A proof of the empty tree is `mptproof` followed by a 0x00 byte.
 It only applies when the tree hash is the empty tree hash,
 and it disproves the existence of all possible keys.
 
-A proof confirming the existence of a key starts with `mptproof` followed by a 0x01 byte
-and then a 32-byte value _v_.
-The hash of the key's leaf node can be recomputed as _h_ = SHA256(_key_ || _v_).
+A proof confirming the existence of a key starts with `mptproof` followed by a 0x01 byte.
+The hash of the key's leaf node can be recomputed as _h_ = SHA256(_key_ || _v_)
+where _v_ is the value associated with the key.
 If the tree is a single node, that is the entire proof: the verifier must check that
 _h_ = _snap_.
 If the tree contains more than one node, the proof continues with

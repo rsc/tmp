@@ -341,15 +341,23 @@ func (tt *testTree) get(key Key, val Val, ok bool) {
 		tt.t.Fatalf("Tree.Prove: %v\n\nLog:\n%s", err, &tt.log)
 	}
 
-	v, o, err := Verify(snap, key, proof)
+	ty, err := GetProofType(proof)
 	if err != nil {
-		tt.t.Fatalf("Verify %v: %v\nSnap: %v\nProof: %x\n\nLog:\n%s", key, err, snap, proof, &tt.log)
-	}
-	if v != val || o != ok {
-		tt.t.Fatalf("get %v:\nhave %v, %v\nwant %v, %v\n\nLog:\n%s", key, v, o, val, ok, &tt.log)
+		tt.t.Fatalf("Tree.GetProofType: %v\n\nLog:\n%s", err, &tt.log)
 	}
 
-	//fmt.Fprintf(&tt.log, "get(%v)\n", key)
+	switch ty {
+	case Inclusion:
+		err := VerifyInclusion(snap, key, val, proof)
+		if err != nil {
+			tt.t.Fatalf("VerifyInclusion %v: %v\nSnap: %v\nProof: %x\n\nLog:\n%s", key, err, snap, proof, &tt.log)
+		}
+	case Noninclusion:
+		err := VerifyNoninclusion(snap, key, proof)
+		if err != nil {
+			tt.t.Fatalf("VerifyNoninclusion %v: %v\nSnap: %v\nProof: %x\n\nLog:\n%s", key, err, snap, proof, &tt.log)
+		}
+	}
 }
 
 func BenchmarkSet1K_100K(b *testing.B) {

@@ -259,13 +259,12 @@ func (n *memNode) prove(pbit int, key Key) Proof {
 	nbit := n.bit()
 	if nbit <= pbit {
 		// view n as leaf
-		var p Proof
 		if n.key == key {
-			p = Proof(proofConfirm)
+			return Proof(proofConfirm)
 		} else {
-			p = append(Proof(proofDeny), n.key[:]...)
+			p := append(Proof(proofDeny), n.key[:]...)
+			return append(p, n.val[:]...)
 		}
-		return append(p, n.val[:]...)
 	}
 
 	var sib Hash

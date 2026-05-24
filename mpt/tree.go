@@ -281,36 +281,14 @@ var (
 	ErrMismatchedProof = errors.New("mismatched mpt proof")
 )
 
-// Verify verifies that p is a valid proof of a lookup for key in snap,
-// returning the proved lookup result (val, ok).
-// If the proof is not valid for key in snap, Verify returns a non-nil error.
-func Verify(snap Snapshot, key Key, proof Proof) (val Val, ok bool, err error) {
-	//fmt.Printf("Verify %v %x\n", key, proof)
-	if string(proof) == proofEmpty {
-		if snap.Hash == emptyTreeHash() {
-			return Val{}, false, nil
-		}
-		return Val{}, false, ErrMismatchedProof
-	}
-
-	var data []byte
-	var pkey Key
-	if data, ok = bytes.CutPrefix(proof, []byte(proofConfirm)); ok && len(data) >= 32 {
-		pkey = key
-		val, data = Val(data[:32]), data[32:]
-	} else if data, ok = bytes.CutPrefix(proof, []byte(proofDeny)); ok && len(data) >= 64 {
-		pkey, val, data = Key(data[:32]), Val(data[32:64]), data[64:]
-		if pkey == key {
-			return Val{}, false, ErrMalformedProof
-		}
-	}
+func verifyInternal(snap Snapshot, key Key, pkey Key, val Val, data []uint8) (err error) {
 	h := hashLeaf(pkey, val)
 	b := 256
 	for len(data) >= 1+32 && int(data[0]) < b {
 		var sib Hash
 		b, sib, data = int(data[0]), Hash(data[1:1+32]), data[1+32:]
 		if key.bit(b) != pkey.bit(b) {
-			return Val{}, false, ErrMalformedProof
+			return ErrMalformedProof
 		}
 		if key.bit(b) == 0 {
 			h = hashInner(b, h, sib)
@@ -318,13 +296,75 @@ func Verify(snap Snapshot, key Key, proof Proof) (val Val, ok bool, err error) {
 			h = hashInner(b, sib, h)
 		}
 	}
-	if len(data) != 0 || h != snap.Hash {
-		return Val{}, false, ErrMalformedProof
+
+	if len(data) != 0 {
+		return ErrMalformedProof
 	}
+	if h != snap.Hash {
+		return ErrMismatchedProof
+	}
+
+	return nil
+}
+
+type ProofType int
+
+const (
+	Inclusion ProofType = iota
+	Noninclusion
+)
+
+// GetProofType returns the type (inclusion/noninclusion) of proof. If the proof does not
+// have an identifiable type, GetProofType returns a non-nil error of ErrMalformedProof
+func GetProofType(proof Proof) (ty ProofType, err error) {
+	// Confirm is an inclusion proof. Deny and Empty are noninclusion proofs
+	if _, ok := bytes.CutPrefix(proof, []byte(proofConfirm)); ok {
+		return Inclusion, nil
+	} else if _, ok := bytes.CutPrefix(proof, []byte(proofEmpty)); ok {
+		return Noninclusion, nil
+	} else if _, ok := bytes.CutPrefix(proof, []byte(proofDeny)); ok {
+		return Noninclusion, nil
+	} else {
+		return -1, ErrMalformedProof
+	}
+}
+
+// VerifyInclusion verifies that p is a valid proof of a lookup for (key, val) in snap.
+// If the proof is not valid, VerifyInclusion returns a non-nil error.
+func VerifyInclusion(snap Snapshot, key Key, val Val, proof Proof) (err error) {
+	data, ok := bytes.CutPrefix(proof, []byte(proofConfirm))
+	if !ok {
+		return ErrMalformedProof
+	}
+
+	err = verifyInternal(snap, key, key, val, data)
+	return err
+}
+
+// VerifyNoninclusion verifies that p is a valid proof that key is not in snap
+// If the proof is not valid, VerifyNoninclusion returns a non-nil error.
+func VerifyNoninclusion(snap Snapshot, key Key, proof Proof) (err error) {
+	if string(proof) == proofEmpty {
+		if snap.Hash == emptyTreeHash() {
+			return nil
+		}
+		return ErrMismatchedProof
+	}
+
+	data, ok := bytes.CutPrefix(proof, []byte(proofDeny))
+	if !ok || len(data) <= 64 {
+		return ErrMalformedProof
+	}
+
+	var pkey Key
+	var val Val
+	pkey, val, data = Key(data[:32]), Val(data[32:64]), data[64:]
 	if pkey == key {
-		return val, true, nil
+		return ErrMalformedProof
 	}
-	return Val{}, false, nil
+
+	err = verifyInternal(snap, key, pkey, val, data)
+	return err
 }
 
 // emptyTreeHash returns the parent hash for a root no child nodes.
