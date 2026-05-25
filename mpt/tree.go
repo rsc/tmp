@@ -281,6 +281,33 @@ var (
 	ErrMismatchedProof = errors.New("mismatched mpt proof")
 )
 
+type ProofType int
+
+const (
+	Inclusion ProofType = iota
+	Noninclusion
+)
+
+// GetProofType returns the type (inclusion/noninclusion) of proof. If the proof does not
+// have an identifiable type, GetProofType returns a non-nil error of ErrMalformedProof
+func GetProofType(proof Proof) (ty ProofType, err error) {
+	// Confirm is an inclusion proof. Deny and Empty are noninclusion proofs
+	if _, ok := bytes.CutPrefix(proof, []byte(proofConfirm)); ok {
+		return Inclusion, nil
+	} else if _, ok := bytes.CutPrefix(proof, []byte(proofEmpty)); ok {
+		return Noninclusion, nil
+	} else if _, ok := bytes.CutPrefix(proof, []byte(proofDeny)); ok {
+		return Noninclusion, nil
+	} else {
+		return -1, ErrMalformedProof
+	}
+}
+
+// verifyInternal verifies that key, val, and data (an MPT proof minus the header parts)
+// produce the root hash of snap, and verifies that pkey and key have the same path in the
+// tree. If the former condition fails, verifyInternal returns ErrMismatchedProof. If the
+// latter condition fails, or if the proof is otherwise malformed, verifyInternal returns
+// ErrMalformedProof.
 func verifyInternal(snap Snapshot, key Key, pkey Key, val Val, data []uint8) (err error) {
 	h := hashLeaf(pkey, val)
 	b := 256
@@ -305,28 +332,6 @@ func verifyInternal(snap Snapshot, key Key, pkey Key, val Val, data []uint8) (er
 	}
 
 	return nil
-}
-
-type ProofType int
-
-const (
-	Inclusion ProofType = iota
-	Noninclusion
-)
-
-// GetProofType returns the type (inclusion/noninclusion) of proof. If the proof does not
-// have an identifiable type, GetProofType returns a non-nil error of ErrMalformedProof
-func GetProofType(proof Proof) (ty ProofType, err error) {
-	// Confirm is an inclusion proof. Deny and Empty are noninclusion proofs
-	if _, ok := bytes.CutPrefix(proof, []byte(proofConfirm)); ok {
-		return Inclusion, nil
-	} else if _, ok := bytes.CutPrefix(proof, []byte(proofEmpty)); ok {
-		return Noninclusion, nil
-	} else if _, ok := bytes.CutPrefix(proof, []byte(proofDeny)); ok {
-		return Noninclusion, nil
-	} else {
-		return -1, ErrMalformedProof
-	}
 }
 
 // VerifyInclusion verifies that p is a valid proof of a lookup for (key, val) in snap.
