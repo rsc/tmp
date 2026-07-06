@@ -19,7 +19,7 @@ import (
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: mptload db1 db2 keys.txt\n")
+	fmt.Fprintf(os.Stderr, "usage: mptload db1 db2 leafdb keys.txt\n")
 	os.Exit(2)
 }
 
@@ -27,12 +27,12 @@ func main() {
 	log.SetPrefix("mptload: ")
 	flag.Usage = usage
 	flag.Parse()
-	if flag.NArg() != 3 {
+	if flag.NArg() != 4 {
 		usage()
 	}
 
-	file1, file2, keys := flag.Arg(0), flag.Arg(1), flag.Arg(2)
-	tree, err := mpt.Create(file1, file2)
+	file1, file2, file3, keys := flag.Arg(0), flag.Arg(1), flag.Arg(2), flag.Arg(3)
+	tree, err := mpt.Create(file1, file2, file3)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func main() {
 		}
 	}
 	log.Print("snap")
-	if _, err := tree.Snap(); err != nil {
+	if _, err := tree.Snap(1); err != nil {
 		log.Fatal(err)
 	}
 	log.Print("sync")
