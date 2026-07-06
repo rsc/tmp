@@ -192,6 +192,9 @@ func (t *memTree) Predict(changes []KeyVal) (Hash, error) {
 		return Hash{}, ErrModifiedTree
 	}
 
+	if err := checkChanges(changes); err != nil {
+		return Hash{}, err
+	}
 	s, list := t.predict([]node{}, t.root, -1, changes)
 	for _, kv := range list {
 		s = reduce(append(s, node{prefix(kv.Key, 256), hashLeaf(kv.Key, kv.Val)}))

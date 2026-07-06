@@ -30,6 +30,10 @@ type Tree interface {
 	// applying the given changes (sorted by key) to the tree,
 	// without modifying the tree.
 	//
+	// It is an error to call Predict with changes that are not
+	// sorted by increasing key or that contain duplicate keys.
+	// Implementations may return [ErrInvalidPredict] in this case.
+	//
 	// It is an error to call Predict if Set has been called without
 	// a subsequent call to Snap: in that case, the caller does not
 	// know what the current hash is.
@@ -97,6 +101,20 @@ type Tree interface {
 
 // ErrModifiedTree indicates that Prove was called after a Set without a Snap.
 var ErrModifiedTree = errors.New("tree modified without snapshot")
+
+// ErrInvalidPredict indicates that Predict was passed a set of
+// changes that was not sorted by increasing key or contained
+// duplicates.
+var ErrInvalidPredict = errors.New("invalid predicted changes")
+
+func checkChanges(changes []KeyVal) error {
+	for i := 0; i < len(changes)-1; i++ {
+		if bytes.Compare(changes[i].Key[:], changes[i+1].Key[:]) >= 0 {
+			return ErrInvalidPredict
+		}
+	}
+	return nil
+}
 
 // A Key is a key used by a Tree.
 // It is usually a cryptographic hash of the actual key data.

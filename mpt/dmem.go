@@ -261,6 +261,9 @@ func (t *diskTree) Predict(changes []KeyVal) (Hash, error) {
 		return Hash{}, ErrModifiedTree
 	}
 
+	if err := checkChanges(changes); err != nil {
+		return Hash{}, err
+	}
 	s, list, err := t.predict([]node{}, t.hdr().root(), -1, changes)
 	if err != nil {
 		return Hash{}, err

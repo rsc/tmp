@@ -445,5 +445,22 @@ func TestPredict(t *testing.T) {
 		if hash != want {
 			t.Errorf("Predict = %v, want %v", hash, want)
 		}
+
+		_, err = tt.tree.Predict([]KeyVal{
+			{Key: h("20...0"), Val: v(4)},
+			{Key: h("20...0"), Val: v(5)},
+		})
+		if err != ErrInvalidPredict {
+			t.Errorf("Predict with duplicate keys: %v, want ErrInvalidPredict", err)
+		}
+
+		_, err = tt.tree.Predict([]KeyVal{
+			{Key: h("40...0"), Val: v(4)},
+			{Key: h("20...0"), Val: v(5)},
+		})
+		if err != ErrInvalidPredict {
+			t.Errorf("Predict with inverted keys: %v, want ErrInvalidPredict", err)
+		}
+
 	})
 }
