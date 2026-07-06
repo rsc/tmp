@@ -8,7 +8,7 @@ Analogous to a [transparent log](https://research.swtch.com/tlog),
 an MPT can cryptographically prove that a given key-value pair exists
 (or that a key does not exist) in a given tree root.
 By recording the sequence of tree roots in a transparent log,
-a server can publish an record of the history of a key-value database,
+a server can publish a record of the history of a key-value database,
 in such a way that auditors can check that the database was correct
 at all times, and clients can be sure the responses they received
 came from the recorded database history.
@@ -114,12 +114,14 @@ without affecting the final tree structure.
 
 For more about standard Patricia trees, see TODO REFERENCE.
 
-Cominbing the Merkle and Patricia pieces, a Merkle Patricia Tree provides the following operations:
+Combining the Merkle and Patricia pieces, a Merkle Patricia Tree provides the following operations:
 
  - Set(key, val): add a new key-value pair to the map.
- - Snap(version): set the tree's version and return the tree root's key prefix and hash.
- - Prove(key): return a proof of the result of looking up a given key in the current snapshot. A separate library function `Verify` verifies a proof and returns the lookup result (whether the key was found and, if so, its associated value).
+ - Snap(version): set the tree's version and return the tree root's hash.
+ - Prove(key): return a lookup result (a value and whether the key was found), along with proof of the result.
+   A separate library function `Verify` verifies the result using the proof.
  - Sync(): flush recent changes to disk.
+ - Predict(keyvals): return the snapshot hash that would result from adding all the keyvals to the map.
 
 The recursive hash of an MPT is defined as follows:
 
@@ -127,7 +129,7 @@ The recursive hash of an MPT is defined as follows:
  - The hash of an inner node is the hash of its bit position and its left and right children's hashes.
 
 A proof confirming that a key-value pair exists in an MPT with a given recursive hash
-is the value followed by the bit position and sibling hash for every inner node along the path
+is the bit position and sibling hash for every inner node along the path
 back to the root.
 The key-value pair can be hashed to obtain the hash of the leaf node,
 and then the running hash can be hashed with the parent's bit position
@@ -137,9 +139,9 @@ the specified bit of the key.)
 Recomputing the root's actual hash proves the lookup.
 
 A proof denying that a target key exists in an MPT is almost identical.
-It consists of the “other key” whose leaf would be found by looking up the key in the tree,
-followed by the proof that that other key is in the tree.
-The verification checks that the other key's proof is valid and also that
+It consists of the “other key-value pair” whose leaf would be found by looking up the key in the tree,
+followed by the proof that that other key-value pair is in the tree.
+The verification checks that the other key-value's proof is valid and also that
 the target key and other key agree at every relevant bit position.
 
 An in-memory MPT implementation is in [mem.go](mem.go).
@@ -169,9 +171,11 @@ is SHA256(_left_ || _right_ || _b_) where _left_ and _right_ are 32-byte values 
 
 ### Proofs
 
-Proofs are variable length strings beginning with the 8-byte sequence `mptproof`.
+Proofs are variable length strings returned by
 
-In Go the verifier's signature is:
+	func (t *Tree) Prove(key Key) (val Val, ok bool, proof Proof, err error)
+
+The verifier's signature is:
 
 	func Verify(snap Snapshot, key Key, val Val, ok bool, proof Proof) error
 
@@ -204,7 +208,7 @@ Then, as before, the recomputed tree hash _h_ can be
 compared against the actual tree hash _snap_.
 
 A proof denying the existence of a key (used with _ok_ = false)
-and then a 32-byte key _k_ and 32-byte value _v_,
+starts with a 32-byte key _k_ and 32-byte value _v_,
 describing a leaf node with hash _h_ = SHA256(_k_ || _v_).
 If the tree is a single node, that is the entire proof: the verifier
 must check that _h_ = _snap_ and that _k_ ≠ _key_.
@@ -412,13 +416,54 @@ Conceptually, we can stop updates,
 write the current tree memory to a new file,
 delete the old file, and then resume updates,
 now writing patches to the new file.
-It is worth introducing two complications.
+
+It is worth introducing three complications.
+
 First, we can reuse the old file as the output for the next compaction,
 alternating between a pair of files
 instead of continually deleting and recreating files.
+
 Second, we can let updates proceed concurrently
 with compaction, so that updates aren't blocked
 waiting to write a few hundred gigabytes to disk.
+
+Third, we can trade a constant number of disk I/O per Set or Prove
+operation for reduced memory requirements.
+In this hybrid approach, the leaf nodes (meaning the key and value fields)
+are all stored in a “leaf file” and not stored in memory.
+Writes to the leaf file are still recorded in patch blocks,
+so that after recovery the leaf file is always at least as up to date as the main
+tree memory image. However, writes to the leaf file also happen immediately,
+so after recovery, the leaf file may also contain writes beyond those reflected
+in the main tree memory image. Having a leaf file that is “too new” cannot
+affect the structure of the overall tree, since keys are never changed after a
+node is allocated. However, the leaf file being too new can mean that values
+that are “too new” are recorded for leaf nodes, so the client must recover by
+replaying all the Set operations that may have happened after the point
+where the memory image was recovered. Once those are replayed, the
+memory image and the leaf file will be in sync.
+
+To support the recovery operation, there is a new method Tree.Version:
+
+	// Version returns the version number of the tree's last complete snapshot.
+	// All Set calls made prior to Snap(version) are guaranteed to be
+	// recorded in the tree. However, if exact is false, then the tree may
+	// include the effect of Set calls made after that snapshot.
+	// In that case, to bring the tree into a consistent state, the client is
+	// expected to replay all Set calls up to the next version.
+	Version() (version int64, exact bool)
+
+In this new approach, calling Prove requires around two disk I/Os:
+for a balanced tree, it would be one to read the leaf key and value
+at the end of the lookup, and one to read that node's sibling for inclusion in the proof.
+More precisely, Prove requires one disk I/O for the leaf and one disk I/O
+for each leaf sibling found along the path back to the root.
+Calling set requires around three disk I/Os: the same reads
+needed by Prove as well as one write to update or create a leaf.
+
+In exchange for these few disk I/Os per operation, the memory
+requirements are reduced to 48 bytes per record and become independent
+of key and value size.
 
 ## Memory Format {#mem}
 
@@ -436,31 +481,27 @@ The tree memory starts with a header with the form:
 
 	version  [ 8 bytes]
 	dirty    [ 1 byte]
-	pad      [ 1 byte]
+	exact    [ 1 byte]
 	root     [ 6 bytes]
 	hash     [32 bytes]
-	nodes    [ 8 bytes]
 
 All numbers are stored in big-endian order
 for legibility when reading hex dumps.
 
  - “version” is a number for clients to use to match the
    tree contents to a position in the underlying transparent log.
+ - “exact” is a boolean indicating whether the tree includes
+   only the changes made before Snap(version).
+   If false, it may contain more changes made after that snapshot.
  - “root” is a pointer to the tree's root node,
    represented as a 48-bit byte offset within the
    tree memory.
- - “nodes” field counts the number of nodes (leaves)
-   stored in the tree.
  - “hash” is the Merkle hash of the tree root.
    When “dirty” is set, the hash is stale and needs to be recomputed.
- - “pad” pads “root” to a 16-bit boundary and “hash” and “nodes”
-   to a 64-bit boundary.
 
 The header is immediately followed by a sequence of Patricia nodes,
 each with the form:
 
-	key      [32 bytes]
-	val      [32 bytes]
 	bit      [ 1 byte]
 	dirty    [ 1 byte]
 	pad      [ 2 bytes]
@@ -468,10 +509,10 @@ each with the form:
 	right    [ 6 bytes]
 	ihash    [32 bytes]
 
-Remember that each Patricia node represents both one leaf node
-and one inner node.
+In a standard implementation, each Patricia node represents both one leaf node
+and one inner node. In this format, the leaf data is stored in a separate
+parallel file. The nodes we are considering only store inner node data.
 
- - “key” and “val” are the key and value for the leaf node.
  - “left” and “right” are pointers to the inner node's
    left and right children;
    “bit” is the bit position to use to decide between them
@@ -510,10 +551,11 @@ Snapshots are still amortized O(1) but not an actual O(1).
 If the snapshot operations caused problematic latency hiccups,
 this lazy recomputation could be abandoned.
 
-Notice that a Patricia node takes 112 bytes,
-so a 2-billion node tree requires about 224 GB of memory,
+Notice that a Patricia node takes 48 bytes,
+so a 2-billion node tree requires about 96 GB of memory,
 well within the 512 GB we allotted ourselves on our
 “reasonably configured server”.
+(There is also another 128 GB of disk for the leaf file.)
 The actual memory for the tree is obtained directly
 using the operating system, not from the Go heap.
 Using _mmap_(2), we can reserve a very large amount
@@ -561,12 +603,15 @@ a valid tree.
 The second and subsequent frames in the file each hold
 a patch block, which holds one or more mutations of the form:
 
-	offset   [varint]
-	N        [varint]
-	data     [N bytes]
+	offset+leaf [varint]
+	N           [varint]
+	data        [N bytes]
 
-That mutation says to write `data` of length `N` at
-`offset` in the tree memory.
+The offset+leaf field is a varint encoding offset<<1 + leaf,
+where leaf is a boolean indicating whether the update is for
+the tree memory or the leaf memory.
+The mutation says to write `data` of length `N` at
+`offset` in the specified memory.
 
 There is no guarantee that a file ends after a valid patch block frame.
 If a frame was only partially written before a process or system crash,
@@ -574,6 +619,10 @@ we still want to read the tree before that point.
 We do this by reading as many valid (checksum-matching) frames
 as possible from the file and stopping at EOF or when we reach
 a frame that is truncated or does not have a valid checksum.
+
+The leaf file data consists of a sequence of fixed-length leaves.
+The leaf nodes are allocated in parallel with the Patricia nodes,
+so that Patricia node N corresponds to leaf N.
 
 ## Compaction {#compaction}
 
@@ -595,9 +644,9 @@ being obsoleted.
 One approach would be to pause all tree updates,
 write the tree to the new file, and then continue
 updates, writing patches to the new file.
-If the tree is 224 GB,
+If the tree is 96 GB,
 then even if we can write at a relatively fast 10 GB/s,
-that would be a 22-second pause.
+that would be a 10-second pause.
 Instead, we can allow tree updates to proceed
 concurrently with compaction.
 
@@ -653,15 +702,22 @@ The improvement is possible because we keep all the data in memory at all times.
 ## Speed {#speed}
 
 On my circa-2023 home server with 128 GB of RAM
-and an NVMe disk using LVM encryption, storing 834 million hashes
-takes about 250 minutes, or about 55,000 Set operations per second.
-This is with constant disk compaction, and I suspect something in my
+and an NVMe disk using LVM encryption,
+using an earlier version of this format that did not have the leaf file
+and stored keys and values in the Patricia nodes,
+storing 834 million hashes takes about 250 minutes,
+or about 55,000 Set operations per second.
+This is with continuous disk compaction, and I suspect something in my
 kernel stack of slowing disk I/O.
 
+Prove operations run in microseconds.
+
+Snap is effectively free.
+
 A “lazy hash” optimization that delays recomputing all inner node hashes
-is delayed until the Sync operation can avoid spending time
+is delayed until the Snap operation can avoid spending time
 computing hashes that will be overwritten by a subsequent Set,
-but it dramatically increases the latency of Sync.
+but it dramatically increases the latency of Snap.
 More important than not computing the hashes is not writing
 them to disk, especially for the somewhat special case of writing all new entries
 when populating a new tree.
@@ -674,9 +730,9 @@ followed by a 7 minute sync, or about 260,000 Set operations second.
 A limited lazy hash that is lazy only up to a fixed number of
 Set operations may be the best of both worlds.
 
-Prove operations run in microseconds.
-
-Snap is effectively free.
+Although Snap with lazy hashes is still amortized O(1),
+callers that want Snap to run in limited time should limit
+the number of Set calls they make between Snaps.
 
 ## Recovery {#recovery}
 
@@ -692,42 +748,3 @@ all of the Set calls before Snap(V) has been retained, and some of the Set
 calls between Snap(V) and Snap(V+1) may also have been retained.
 It suffices to replay all the Set operations between Snap(V) and Snap(V+1)
 and then Snap(V+1) to get a consistent tree.
-
-## Hybrid Approach
-
-The approach described so far is the original in-memory approach.
-It is tagged as mpt v0.1.0.
-
-This section describes a hybrid approach implemented in later versions.
-The hybrid approach trades a constant number of disk I/O per Set or Prove
-operation for reduced memory requirements. In the hybrid approach, the
-leaf nodes (meaning the key and value fields) are all stored in a “leaf file”
-not stored in memory. Writes to the leaf file are still recorded in patch blocks,
-so that after recovery the leaf file is always at least as up to date as the main
-tree memory image. However, writes to the leaf file also happen immediately,
-so after recovery, the leaf file may also contain writes beyond those reflected
-in the main tree memory image. Having a leaf file that is “too new” cannot
-affect the structure of the overall tree, since keys are never changed after a
-node is allocated. However, the leaf file being too new can mean that values
-that are “too new” are recorded for leaf nodes, so the client must recover by
-replaying all the Set operations that may have happened after the point
-where the memory image was recovered. Once those are replayed, the
-memory image and the leaf file will be in sync.
-
-To support the recovery operation, there is a new method Tree.Version:
-
-	// Version returns the version number of the tree's last complete snapshot.
-	// All Set calls made prior to Snap(version) are guaranteed to be
-	// recorded in the tree. However, if exact is false, then the tree may
-	// include the effect of Set calls made after that snapshot.
-	// In that case, to bring the tree into a consistent state, the client is
-	// expected to replay all Set calls up to the next version.
-	Version() (version int64, exact bool)
-
-In this new approach, calling Prove requires two disk I/Os: one to read the
-leaf key and value at the end of the lookup, and one to read that node's sibling
-for inclusion in the proof. Calling set requires three disk I/Os: the same two reads
-needed by Prove as well as one write to update or create a leaf.
-
-In exchange for these two or three disk I/Os per operation, the memory
-requirements are reduced from 112 bytes per record to 48 bytes per record.

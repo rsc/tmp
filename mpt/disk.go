@@ -22,15 +22,12 @@ import (
 //
 //	version [8]
 //	dirty [1]
-//	pad [1]
+//	exact [1]
 //	root [6]
 //	hash [32]
-//	nodes [8]
 //
 // The header is followed by a sequence of Patricia nodes of the form:
 //
-//	key [32]
-//	val [32]
 //	bit [1]
 //	dirty [1]
 //	pad [2]
@@ -51,7 +48,6 @@ const (
 	hdrSize    = 48
 
 	// node offsets
-	// setLeftRight knows that left and right are contiguous.
 	nodeUbit  = 0
 	nodeDirty = 1
 	nodeLeft  = 4
@@ -62,10 +58,8 @@ const (
 	// address size
 	addrSize = 6
 
-	// leaf file details
-	leafMagic   = "mpt leaf\n\x00\x00\x00\x00\x00\x00\x00"
-	leafHdrSize = 16
-	leafSize    = 64
+	// leaf size in bytes
+	leafSize = 64
 )
 
 // File is the interface needed for on-disk storage.
@@ -116,14 +110,14 @@ func (t *diskTree) broken(err error) error {
 	return err
 }
 
-// Create creates a new, empty on-disk [Tree] stored in the two named files.
-// The files must not already exist, unless they are both os.DevNull,
+// Create creates a new, empty on-disk [Tree] stored in the three named files.
+// The files must not already exist, unless they are all os.DevNull,
 // in which case the Tree is held only in memory.
 func Create(file1, file2, disk string) (Tree, error) {
 	return open(file1, file2, disk, os.O_WRONLY|os.O_CREATE|os.O_EXCL, "create")
 }
 
-// Open opens an on-disk [Tree] stored in the two named files.
+// Open opens an on-disk [Tree] stored in the three named files.
 // The files must have been created by a previous call to [Create].
 func Open(file1, file2, disk string) (Tree, error) {
 	return open(file1, file2, disk, os.O_RDWR, "open")
@@ -152,10 +146,11 @@ func open(file1, file2, file3 string, mode int, op string) (Tree, error) {
 }
 
 // New creates or opens an on-disk [Tree] in the given files.
-// If both files are empty, New creates a new tree in those files.
+// If the files are empty, New creates a new tree in those files.
 // Otherwise, New opens a pre-existing tree stored in those files.
-// Only one file contains the latest tree at a time, but the
+// Only one of the first two files contains the latest tree at a time, but the
 // implementation alternates between files to implement atomic updates.
+// The third file holds leaf nodes and is always in use.
 func New(file1, file2, file3 File) (Tree, error) {
 	var op string
 	var buf [1]byte
@@ -170,11 +165,8 @@ func New(file1, file2, file3 File) (Tree, error) {
 }
 
 // memOpen is the general implementation of open.
-// op is "create", "open", or "new", indicating the operation
-// being performed on the files; sync indicates whether to
-// try to use the files' Sync method.
-// (When using /dev/null for an in-memory tree,
-// we avoid calling Sync, because it will fail.)
+// op is "create" or "open", indicating the operation
+// being performed on the files.
 func memOpen(file1, file2, disk File, op string) (_ Tree, err error) {
 	pmemOp := pmem.Open
 	if op == "create" {
