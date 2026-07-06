@@ -45,9 +45,16 @@ type Tree interface {
 	// set the version.
 	Snap(version int64) (Snapshot, error)
 
-	// Prove looks up key in the tree and returns a proof
-	// either of key's value or that key is not present.
-	// Use [Verify] to retrieve the lookup result.
+	// Prove looks up key in the tree and returns a claimed
+	// associated value (if any) and whether the key is present at all,
+	// along with a proof of those two claimed results.
+	// Use [Verify] to verify the proof before trusting the claims.
+	//
+	// If Prove returns normally (with err == nil), then proof is non-nil,
+	// although it may be empty.
+	//
+	// If Prove returns a non-nil error error, then val is Val{},
+	// ok is false, and proof is nil.
 	//
 	// Prove is a read-only operation and can be called
 	// concurrently with other calls to Prove, but not other
@@ -56,7 +63,7 @@ type Tree interface {
 	// It is an error to call Prove if Set has been called without
 	// a subsequent call to Snap: in that case, the caller does not
 	// know what the root hash is, so the proof will be unverifiable.
-	Prove(key Key) (Proof, error)
+	Prove(key Key) (val Val, ok bool, proof Proof, err error)
 
 	// Sync flushes all changes from past Set and Snap calls to
 	// the underlying files and then calls the files' Sync methods
@@ -239,18 +246,12 @@ type Proof []byte
 
 // Proof Format
 //
-// Proofs start with "mptproof", followed by a one-byte tag that determines
-// the format of the additional data. The tags are:
-//
-//   - 0: proof of empty tree; no data
-//   - 1: proof key is in tree; data is value and path
-//   - 2: proof key in not in tree; data is alt key, value, and path
+// The format of the proof depends on the lookup result being proved.
 //
 // The proof of an empty tree carries no data; to verify the proof is to check that the
-// tree snapshot is the empty tree hash.
+// tree snapshot is the empty tree hash and that the lookup returned Val{}, false.
 //
-// The proof of a key being in the tree is the key's value followed by the
-// path from that key-value pair up to the tree root.
+// The proof of a key-value pair being in the tree is the path from that pair up to the tree root.
 // For each node along the path, the data contains a one-byte overlap count
 // (the number of bits shared by the left and right children of the node)
 // and the 32-byte hash of the sibling not on the path.
@@ -265,52 +266,55 @@ type Proof []byte
 // During the recomputation, the verifier must check that for every overlap count
 // in the path, the target key and the alt-key agree at that bit position,
 // verifying that a search for the target would find the alt-key instead.
-const (
-	proofMagic   = "mptproof"
-	proofEmpty   = proofMagic + "\x00"
-	proofConfirm = proofMagic + "\x01"
-	proofDeny    = proofMagic + "\x02"
-)
 
 var (
-	// ErrMalformedProof indicates that a proof is not formatted correctly.
-	ErrMalformedProof = errors.New("malformed mpt proof")
+	// ErrInvalidProof indicates that a proof is not valid for the claimed result.
+	ErrInvalidProof = errors.New("invalid mpt proof")
 
-	// ErrMismatchedProof indicates that a proof does not match
-	// the snapshot and key passed to Verify.
-	ErrMismatchedProof = errors.New("mismatched mpt proof")
+	// ErrInvalidLookup indicates that ok is false but val is non-zero.
+	ErrInvalidLookup = errors.New("invalid mpt lookup result")
 )
 
-// Verify verifies that p is a valid proof of a lookup for key in snap,
-// returning the proved lookup result (val, ok).
-// If the proof is not valid for key in snap, Verify returns a non-nil error.
-func Verify(snap Snapshot, key Key, proof Proof) (val Val, ok bool, err error) {
+// Verify verifies that p is a valid proof that a lookup for key in snap
+// should return the result (val, ok).
+// If the proof is not valid, Verify returns a non-nil error.
+//
+// [VerifyPresent] and [VerifyNotPresent] are convenience functions
+// that wrap Verify.
+func Verify(snap Snapshot, key Key, val Val, ok bool, proof Proof) error {
 	//fmt.Printf("Verify %v %x\n", key, proof)
-	if string(proof) == proofEmpty {
+	if !ok && val != (Val{}) {
+		return ErrInvalidLookup
+	}
+	if !ok && len(proof) == 0 {
 		if snap.Hash == emptyTreeHash() {
-			return Val{}, false, nil
+			return nil
 		}
-		return Val{}, false, ErrMismatchedProof
+		return ErrInvalidProof
 	}
 
-	var data []byte
 	var pkey Key
-	if data, ok = bytes.CutPrefix(proof, []byte(proofConfirm)); ok && len(data) >= 32 {
+	if ok {
 		pkey = key
-		val, data = Val(data[:32]), data[32:]
-	} else if data, ok = bytes.CutPrefix(proof, []byte(proofDeny)); ok && len(data) >= 64 {
-		pkey, val, data = Key(data[:32]), Val(data[32:64]), data[64:]
+	} else {
+		if len(proof) < 64 {
+			return ErrInvalidProof
+		}
+		pkey = Key(proof[:32])
+		val = Val(proof[32:64])
+		proof = proof[64:]
 		if pkey == key {
-			return Val{}, false, ErrMalformedProof
+			return ErrInvalidProof
 		}
 	}
+
 	h := hashLeaf(pkey, val)
 	b := 256
-	for len(data) >= 1+32 && int(data[0]) < b {
+	for len(proof) >= 1+32 && int(proof[0]) < b {
 		var sib Hash
-		b, sib, data = int(data[0]), Hash(data[1:1+32]), data[1+32:]
+		b, sib, proof = int(proof[0]), Hash(proof[1:1+32]), proof[1+32:]
 		if key.bit(b) != pkey.bit(b) {
-			return Val{}, false, ErrMalformedProof
+			return ErrInvalidProof
 		}
 		if key.bit(b) == 0 {
 			h = hashInner(b, h, sib)
@@ -318,13 +322,20 @@ func Verify(snap Snapshot, key Key, proof Proof) (val Val, ok bool, err error) {
 			h = hashInner(b, sib, h)
 		}
 	}
-	if len(data) != 0 || h != snap.Hash {
-		return Val{}, false, ErrMalformedProof
+	if len(proof) != 0 || h != snap.Hash {
+		return ErrInvalidProof
 	}
-	if pkey == key {
-		return val, true, nil
-	}
-	return Val{}, false, nil
+	return nil
+}
+
+// VerifyPresent is shorthand for [Verify](snap, key, val, true, proof).
+func VerifyPresent(snap Snapshot, key Key, val Val, proof Proof) error {
+	return Verify(snap, key, val, true, proof)
+}
+
+// VerifyNotPresent is shorthand for [Verify](snap, key, Val{}, false, proof).
+func VerifyNotPresent(snap Snapshot, key Key, proof Proof) error {
+	return Verify(snap, key, Val{}, false, proof)
 }
 
 // emptyTreeHash returns the parent hash for a root no child nodes.

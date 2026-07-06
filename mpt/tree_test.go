@@ -336,12 +336,11 @@ func (tt *testTree) get(key Key, val Val, ok bool) {
 		tt.t.Fatalf("Tree.Snap: %v\n\nLog:\n%s", err, &tt.log)
 	}
 
-	proof, err := tt.tree.Prove(key)
+	v, o, proof, err := tt.tree.Prove(key)
 	if err != nil {
 		tt.t.Fatalf("Tree.Prove: %v\n\nLog:\n%s", err, &tt.log)
 	}
-
-	v, o, err := Verify(snap, key, proof)
+	err = Verify(snap, key, v, o, proof)
 	if err != nil {
 		tt.t.Fatalf("Verify %v: %v\nSnap: %v\nProof: %x\n\nLog:\n%s", key, err, snap, proof, &tt.log)
 	}
@@ -412,11 +411,10 @@ func benchmarkProof(b *testing.B, tree Tree, treeSize int) {
 
 	b.ReportAllocs()
 	for b.Loop() {
-		proof, err := tree.Prove(key)
+		_, _, _, err := tree.Prove(key)
 		if err != nil {
 			b.Fatal(err)
 		}
-		_ = proof
 	}
 }
 

@@ -327,41 +327,38 @@ func (t *diskTree) predict(s []node, a addr, pbit int, list []KeyVal) ([]node, [
 }
 
 // Prove returns a proof of the presence or absence of key in t.
-func (t *diskTree) Prove(key Key) (Proof, error) {
+func (t *diskTree) Prove(key Key) (val Val, ok bool, proof Proof, err error) {
 	t.mmu.RLock()
 	defer t.mmu.RUnlock()
 
 	if t.err != nil {
-		return nil, t.err
+		return Val{}, false, nil, t.err
 	}
 	if t.hdr().dirty() {
-		return nil, ErrModifiedTree
+		return Val{}, false, nil, ErrModifiedTree
 	}
 	root, err := t.node(t.hdr().root())
 	if err != nil {
-		return nil, err
+		return Val{}, false, nil, err
 	}
 	if root == nil {
-		return Proof(proofEmpty), nil
+		return Val{}, false, Proof{}, nil
 	}
 	return root.prove(t, -1, key)
 }
 
-func (n *diskNode) prove(t *diskTree, pbit int, key Key) (Proof, error) {
+func (n *diskNode) prove(t *diskTree, pbit int, key Key) (val Val, ok bool, proof Proof, err error) {
 	nbit := n.bit()
 	if nbit <= pbit {
 		// view n as leaf
 		nkey, nval, err := n.keyVal(t)
 		if err != nil {
-			return nil, err
+			return Val{}, false, nil, err
 		}
-		var p Proof
 		if nkey == key {
-			p = Proof(proofConfirm)
-		} else {
-			p = append(Proof(proofDeny), nkey[:]...)
+			return nval, true, Proof{}, nil
 		}
-		return append(p, nval[:]...), nil
+		return Val{}, false, append(Proof(nkey[:]), nval[:]...), nil
 	}
 
 	childAddr, sibAddr := n.left(), n.right()
@@ -370,22 +367,24 @@ func (n *diskNode) prove(t *diskTree, pbit int, key Key) (Proof, error) {
 	}
 	child, err := t.node(childAddr)
 	if err != nil {
-		return nil, err
+		return Val{}, false, nil, err
 	}
 	sib, err := t.node(sibAddr)
 	if err != nil {
-		return nil, err
+		return Val{}, false, nil, err
 	}
 	sibHash, err := sib.hash(t, nbit)
 	if err != nil {
-		return nil, err
+		return Val{}, false, nil, err
 	}
 
-	p, err := child.prove(t, nbit, key)
+	val, ok, proof, err = child.prove(t, nbit, key)
 	if err != nil {
-		return nil, err
+		return
 	}
-	return append(append(p, byte(nbit)), sibHash[:]...), nil
+	proof = append(proof, byte(nbit))
+	proof = append(proof, sibHash[:]...)
+	return
 }
 
 func (t *diskTree) check() {
