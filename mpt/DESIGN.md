@@ -173,25 +173,25 @@ Proofs are variable length strings beginning with the 8-byte sequence `mptproof`
 
 In Go the verifier's signature is:
 
-	func Verify(snap Snapshot, key Key, proof Proof) (val Val, ok bool, err error)
+	func Verify(snap Snapshot, key Key, val Val, ok bool, proof Proof) error
 
-The verifier is given a tree hash (called a snapshot), a specific key, and a proof,
-and it returns three results: (1) the value associated with the key,
-if the proof proved the existence of the key in the tree,
-(2) whether the proved result confirms or denies the existence of the key,
-and (3) an error if the proof was invalid or did not match the tree hash.
+The verifier is given a tree hash (called a snapshot), a specific key,
+an associated value, a boolean indicating whether the key is present in the tree, and a proof,
+and it checks the proof, returning nil if the proof is valid and verifies the
+lookup of key returning val, ok. It returns an error otherwise.
 
-A proof of the empty tree is `mptproof` followed by a 0x00 byte.
+A proof of the empty tree has length zero.
 It only applies when the tree hash is the empty tree hash,
 and it disproves the existence of all possible keys.
 
-A proof confirming the existence of a key starts with `mptproof` followed by a 0x01 byte
-and then a 32-byte value _v_.
-The hash of the key's leaf node can be recomputed as _h_ = SHA256(_key_ || _v_).
-If the tree is a single node, that is the entire proof: the verifier must check that
-_h_ = _snap_.
-If the tree contains more than one node, the proof continues with
-one or more descriptions of sibling nodes along the path back to the tree root.
+A proof confirming the existence of a key-val pair
+in a tree consisting of a single leaf node also has length zero.
+The hash of the key's leaf node can be recomputed as _h_ = SHA256(_key_ || _val_).
+The verifier then checks that the hash is the root hash: _h_ = _snap_.
+
+More generally, a proof confirming the existence of a key-val pair
+in a tree consists of zero or more descriptions of sibling nodes along
+the path from the leaf back up to the tree root.
 Each sibling node is encoded as 33 bytes: a one-byte bit position _b_
 followed by a 32-byte sibling hash _sib_.
 The verifier must check whether the _b_'th bit of _key_ is 0 or 1
@@ -201,9 +201,9 @@ and then update the running tree hash accordingly:
    - _h_ = SHA256(_sib_ || _h_ || _b_) if bit _b_ of _key_ is 1.
 
 Then, as before, the recomputed tree hash _h_ can be
-compared against the actual tree hash.
+compared against the actual tree hash _snap_.
 
-A proof denying the existence of a key starts with `mptproof` followed by a 0x02 byte
+A proof denying the existence of a key (used with _ok_ = false)
 and then a 32-byte key _k_ and 32-byte value _v_,
 describing a leaf node with hash _h_ = SHA256(_k_ || _v_).
 If the tree is a single node, that is the entire proof: the verifier
@@ -216,10 +216,10 @@ checking along the way that _k_ and _key_ agree on every bit _b_.
 to walk through the tree in search of _key_.)
 At the end, the verifier must check that _h_ = _snap_ and that _k_ ≠ _key_.
 
-The worst case length of an existence proof is 8+1+32+33*256 = 8489 bytes,
+The worst case length of an existence proof is 33*256 = 8448 bytes,
 although random keys will never produce a path of length 256.
 
-The worst case length of a non-existence proof is 8+1+64+33*255 = 8488 bytes.
+The worst case length of a non-existence proof is 64+33*255 = 8479 bytes.
 A non-existence proof can only have 255 siblings because otherwise the proof
 would describe a key _k_ that agrees with _key_ at all 256 bit positions,
 but then _k_ ≠ _key_ could not be true.
@@ -255,7 +255,7 @@ The result is a factor of three in the size of the proofs generated (and sent ov
 
 ## Tree Algorithms
 
-There are two potentially important computations MPT hashes
+There are two potentially important computations on MPT hashes
 that can be done without creating an explicit tree representation.
 
 ### Whole Tree Hash
