@@ -7,14 +7,15 @@ import "unsafe"
 
 // contains reports whether big contains little;
 // that is, it reports whether little is a subslice of big.
+// If either big or little is empty, contains returns false.
 func contains(big, little []byte) bool {
-	return uintptr(unsafe.Pointer(&big[0])) <= uintptr(unsafe.Pointer(&little[0])) &&
+	return len(big) > 0 && len(little) > 0 &&
+		uintptr(unsafe.Pointer(&big[0])) <= uintptr(unsafe.Pointer(&little[0])) &&
 		uintptr(unsafe.Pointer(&little[len(little)-1])) <= uintptr(unsafe.Pointer(&big[len(big)-1]))
 }
 
 // Offset reports little's starting position within big.
 // If big does not contain little, Offset returns ^uintptr(0), false.
-// The caller must have checked sliceContains(big, little) already.
 func Offset(big, little []byte) (offset uintptr, ok bool) {
 	if !contains(big, little) {
 		return ^uintptr(0), false

@@ -70,6 +70,9 @@ type Tree interface {
 	// to flush the changes to disk. (If the files are *os.File files,
 	// Sync calls fsync(2).)
 	//
+	// Sync must not be called concurrently with other calls to Sync
+	// or (as noted above) with calls to Set.
+	//
 	// Even in the absence of calls to Sync, a Tree provides the
 	// guarantee that on recovery from a crash, it can identify the
 	// latest snapshot whose Set calls are fully included in the tree.
@@ -363,9 +366,6 @@ func hashInner(b int, left, right Hash) Hash {
 	copy(enc[32:64], right[:])
 	enc[64] = byte(b)
 	h := sha256.Sum256(enc[:])
-	if right == (Hash{}) {
-		panic("zero")
-	}
 	// fmt.Printf("hashInner %v %v %d -> %x\n", left, right, bits, h[:])
 	return h
 }

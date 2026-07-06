@@ -88,6 +88,8 @@ func (t *diskTree) snap(version int64) error {
 		// updating arbitrarily many hashes during rehash.
 		// Without group, ordering matters: write hash before dirty
 		// and both before version.
+		//
+		// Also note: dirty implies that tree is non-empty, so there is a root.
 		root, err := t.node(t.hdr().root())
 		if err != nil {
 			return err
@@ -113,6 +115,9 @@ func (t *diskTree) snap(version int64) error {
 
 // Version returns version information about the tree.
 func (t *diskTree) Version() (version int64, exact bool) {
+	t.mmu.RLock()
+	defer t.mmu.RUnlock()
+
 	hdr := t.hdr()
 	return hdr.version(), hdr.exact()
 }

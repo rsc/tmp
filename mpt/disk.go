@@ -84,8 +84,13 @@ var _ pmem.File = File(nil)
 // A diskTree is an on-disk [Tree].
 type diskTree struct {
 	// mmu is the memory mapping mutex.
+	//
 	// All methods except Close do mmu.RLock and mmu.RUnlock
-	// in order to be allowed to use pmem.Data() aka mem.
+	// in order to be allowed to read and write pmem.Data() aka mem.
+	// Note that it is OK to write the memory while holding the "RLock".
+	// The point of the shared RLock is to stop Close from unmapping
+	// the memory entirely.
+	//
 	// Close calls mmu.Lock/mmu.Unlock to wait for all other
 	// method calls to finish before unmapping the memory.
 	mmu  sync.RWMutex
@@ -162,12 +167,6 @@ func New(file1, file2, file3 File) (Tree, error) {
 		op = "open"
 	}
 	return memOpen(file1, file2, file3, op)
-}
-
-func setActive(f File, b bool) {
-	if f, ok := f.(interface{ setActive(bool) }); ok {
-		f.setActive(b)
-	}
 }
 
 // memOpen is the general implementation of open.
@@ -251,8 +250,9 @@ func (t *diskTree) Close() error {
 	if t.closed {
 		return fmt.Errorf("tree already closed")
 	}
+	t.closed = true
 	if err := t.pmem.Sync(); err != nil {
-		return t.broken(err)
+		t.broken(err)
 	}
 	if err := t.pmem.Release(); err != nil {
 		t.broken(err)
@@ -268,10 +268,12 @@ func (t *diskTree) Close() error {
 	if err := t.file2.Close(); err != nil {
 		t.broken(err)
 	}
+	if err := t.leaf.Close(); err != nil {
+		t.broken(err)
+	}
 	if t.err != nil {
 		return t.err
 	}
-	t.closed = true
 	t.err = errors.New("tree is closed") // stop future method calls
 	return nil
 }

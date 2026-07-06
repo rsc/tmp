@@ -23,7 +23,6 @@ import (
 	"hash"
 	"io"
 	"log"
-	"runtime/debug"
 	"strings"
 	"time"
 
@@ -216,7 +215,6 @@ type compact struct {
 // errors permanently break all future uses of the memory.
 func (m *Mem) broken(err error) error {
 	if m.err == nil {
-		fmt.Println("BROKEN ", err, " \n", string(debug.Stack()))
 		m.err = err
 	}
 	return err
@@ -587,6 +585,7 @@ func (m *Mem) Data() []byte {
 
 // Expand extends the length of the current memory
 // to be at least n bytes and returns the extended slice.
+// The base pointer of the memory does not change.
 func (m *Mem) Expand(n int) ([]byte, error) {
 	if m.err != nil {
 		return nil, m.err
