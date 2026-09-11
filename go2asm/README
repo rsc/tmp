@@ -17,17 +17,17 @@ To extract the assembly for the function math.IsNaN:
     $ go build -a -v -gcflags -S math 2>&1 | go2asm -s math.IsNaN
     #include "funcdata.h"
 
-    TEXT math·IsNaN(SB), $0-16 // /Users/rsc/go/src/math/bits.go:31
-    	NO_LOCAL_POINTERS
-    	// FUNCDATA $0, gclocals·f207267fbf96a0178e8758c6e3e0ce28(SB) (args)
-    	// FUNCDATA $1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB) (no locals)
-    	MOVSD      f+0(FP), X0  // bits.go:36
-    	UCOMISD    X0, X0
-    	SETNE      CL
-    	SETPS      AL
-    	ORL        AX, CX
-    	MOVB       CL, is+8(FP)
-    	RET
+    TEXT math·IsNaN(SB), NOSPLIT|ABIInternal, $0-8 // /usr/local/go/src/math/bits.go:34
+        NO_LOCAL_POINTERS
+        // FUNCDATA $0, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB) (args)
+        // FUNCDATA $1, gclocals·33cdeccccebe80329f1fdbee7f5874cb(SB) (no locals)
+        FUNCDATA   $5, math·IsNaN.arginfo1(SB)
+        UCOMISD    X0, X0  // bits.go:39
+        SETNE      CL
+        SETPS      AL
+        ORL        AX, CX
+        MOVL       CX, AX
+        RET
     $
 
 Or to extract the assembly for a test program:
