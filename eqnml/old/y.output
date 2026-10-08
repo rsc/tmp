@@ -1,0 +1,355 @@
+
+state 0
+	$accept: .top $end 
+
+	MATRIX  shift 10
+	MROW  shift 9
+	QTEXT  shift 5
+	CONTIG  shift 6
+	'{'  shift 4
+	'~'  shift 7
+	'^'  shift 8
+	.  error
+
+	eqn  goto 2
+	box  goto 3
+	top  goto 1
+
+state 1
+	$accept:  top.$end 
+
+	$end  accept
+	.  error
+
+
+state 2
+	top:  eqn.EOF 
+	eqn:  eqn.box 
+
+	MATRIX  shift 10
+	MROW  shift 9
+	EOF  shift 11
+	QTEXT  shift 5
+	CONTIG  shift 6
+	'{'  shift 4
+	'~'  shift 7
+	'^'  shift 8
+	.  error
+
+	box  goto 12
+
+state 3
+	eqn:  box.    (2)
+	box:  box.SUB box 
+	box:  box.SUP box 
+
+	SUP  shift 14
+	SUB  shift 13
+	.  reduce 2 (src line 31)
+
+
+state 4
+	box:  '{'.eqn '}' 
+
+	MATRIX  shift 10
+	MROW  shift 9
+	QTEXT  shift 5
+	CONTIG  shift 6
+	'{'  shift 4
+	'~'  shift 7
+	'^'  shift 8
+	.  error
+
+	eqn  goto 15
+	box  goto 3
+
+state 5
+	box:  QTEXT.    (5)
+
+	.  reduce 5 (src line 40)
+
+
+state 6
+	box:  CONTIG.    (6)
+
+	.  reduce 6 (src line 42)
+
+
+state 7
+	box:  '~'.    (7)
+
+	.  reduce 7 (src line 44)
+
+
+state 8
+	box:  '^'.    (8)
+
+	.  reduce 8 (src line 46)
+
+
+state 9
+	box:  MROW.'{' eqn '}' 
+
+	'{'  shift 16
+	.  error
+
+
+state 10
+	box:  MATRIX.textopt '{' rows '}' 
+	textopt: .    (18)
+
+	QTEXT  shift 18
+	.  reduce 18 (src line 69)
+
+	textopt  goto 17
+
+state 11
+	top:  eqn EOF.    (1)
+
+	.  reduce 1 (src line 27)
+
+
+state 12
+	eqn:  eqn box.    (3)
+	box:  box.SUB box 
+	box:  box.SUP box 
+
+	SUP  shift 14
+	SUB  shift 13
+	.  reduce 3 (src line 34)
+
+
+state 13
+	box:  box SUB.box 
+
+	MATRIX  shift 10
+	MROW  shift 9
+	QTEXT  shift 5
+	CONTIG  shift 6
+	'{'  shift 4
+	'~'  shift 7
+	'^'  shift 8
+	.  error
+
+	box  goto 19
+
+state 14
+	box:  box SUP.box 
+
+	MATRIX  shift 10
+	MROW  shift 9
+	QTEXT  shift 5
+	CONTIG  shift 6
+	'{'  shift 4
+	'~'  shift 7
+	'^'  shift 8
+	.  error
+
+	box  goto 20
+
+state 15
+	eqn:  eqn.box 
+	box:  '{' eqn.'}' 
+
+	MATRIX  shift 10
+	MROW  shift 9
+	QTEXT  shift 5
+	CONTIG  shift 6
+	'{'  shift 4
+	'}'  shift 21
+	'~'  shift 7
+	'^'  shift 8
+	.  error
+
+	box  goto 12
+
+state 16
+	box:  MROW '{'.eqn '}' 
+
+	MATRIX  shift 10
+	MROW  shift 9
+	QTEXT  shift 5
+	CONTIG  shift 6
+	'{'  shift 4
+	'~'  shift 7
+	'^'  shift 8
+	.  error
+
+	eqn  goto 22
+	box  goto 3
+
+state 17
+	box:  MATRIX textopt.'{' rows '}' 
+
+	'{'  shift 23
+	.  error
+
+
+state 18
+	textopt:  QTEXT.    (19)
+
+	.  reduce 19 (src line 71)
+
+
+state 19
+	box:  box.SUB box 
+	box:  box SUB box.    (10)
+	box:  box.SUP box 
+
+	SUP  shift 14
+	SUB  shift 13
+	.  reduce 10 (src line 50)
+
+
+state 20
+	box:  box.SUB box 
+	box:  box.SUP box 
+	box:  box SUP box.    (11)
+
+	SUP  shift 14
+	SUB  shift 13
+	.  reduce 11 (src line 52)
+
+
+state 21
+	box:  '{' eqn '}'.    (4)
+
+	.  reduce 4 (src line 37)
+
+
+state 22
+	eqn:  eqn.box 
+	box:  MROW '{' eqn.'}' 
+
+	MATRIX  shift 10
+	MROW  shift 9
+	QTEXT  shift 5
+	CONTIG  shift 6
+	'{'  shift 4
+	'}'  shift 24
+	'~'  shift 7
+	'^'  shift 8
+	.  error
+
+	box  goto 12
+
+state 23
+	box:  MATRIX textopt '{'.rows '}' 
+	eqnopt: .    (13)
+
+	MATRIX  shift 10
+	MROW  shift 9
+	QTEXT  shift 5
+	CONTIG  shift 6
+	'{'  shift 4
+	'~'  shift 7
+	'^'  shift 8
+	.  reduce 13 (src line 57)
+
+	eqn  goto 27
+	box  goto 3
+	eqnopt  goto 26
+	rows  goto 25
+
+state 24
+	box:  MROW '{' eqn '}'.    (9)
+
+	.  reduce 9 (src line 48)
+
+
+state 25
+	box:  MATRIX textopt '{' rows.'}' 
+	rows:  rows.'&' eqnopt 
+	rows:  rows.BACKSLASH2 eqnopt 
+
+	BACKSLASH2  shift 30
+	'}'  shift 28
+	'&'  shift 29
+	.  error
+
+
+state 26
+	rows:  eqnopt.    (15)
+
+	.  reduce 15 (src line 61)
+
+
+state 27
+	eqn:  eqn.box 
+	eqnopt:  eqn.    (14)
+
+	MATRIX  shift 10
+	MROW  shift 9
+	QTEXT  shift 5
+	CONTIG  shift 6
+	'{'  shift 4
+	'~'  shift 7
+	'^'  shift 8
+	.  reduce 14 (src line 59)
+
+	box  goto 12
+
+state 28
+	box:  MATRIX textopt '{' rows '}'.    (12)
+
+	.  reduce 12 (src line 54)
+
+
+state 29
+	rows:  rows '&'.eqnopt 
+	eqnopt: .    (13)
+
+	MATRIX  shift 10
+	MROW  shift 9
+	QTEXT  shift 5
+	CONTIG  shift 6
+	'{'  shift 4
+	'~'  shift 7
+	'^'  shift 8
+	.  reduce 13 (src line 57)
+
+	eqn  goto 27
+	box  goto 3
+	eqnopt  goto 31
+
+state 30
+	rows:  rows BACKSLASH2.eqnopt 
+	eqnopt: .    (13)
+
+	MATRIX  shift 10
+	MROW  shift 9
+	QTEXT  shift 5
+	CONTIG  shift 6
+	'{'  shift 4
+	'~'  shift 7
+	'^'  shift 8
+	.  reduce 13 (src line 57)
+
+	eqn  goto 27
+	box  goto 3
+	eqnopt  goto 32
+
+state 31
+	rows:  rows '&' eqnopt.    (16)
+
+	.  reduce 16 (src line 64)
+
+
+state 32
+	rows:  rows BACKSLASH2 eqnopt.    (17)
+
+	.  reduce 17 (src line 66)
+
+
+21 terminals, 7 nonterminals
+20 grammar rules, 33/16000 states
+0 shift/reduce, 0 reduce/reduce conflicts reported
+56 working sets used
+memory: parser 21/240000
+22 extra closures
+101 shift entries, 1 exceptions
+17 goto entries
+7 entries saved by goto default
+Optimizer space used: output 79/240000
+79 table entries, 23 zero
+maximum spread: 21, maximum offset: 30

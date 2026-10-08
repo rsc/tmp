@@ -1,0 +1,4 @@
+golang.org/x/tools v0.51.0 h1:k4Xc/1Om9jwkBJBo4NVLMSARBoWtK10mx+W5BnXCeAI=
+golang.org/x/tools v0.51.0/go.mod h1:9eEncMayCV6zRMGhR5eZEC2iBx98qWcF1HZ9Z7wJOoA=
+rsc.io/diff v0.0.0-20190621135850-fe3479844c3c h1:/WCDjRGIVDjKlhtSc1PEApp2fR58gfSVK62dr/yQNyQ=
+rsc.io/diff v0.0.0-20190621135850-fe3479844c3c/go.mod h1:AB6TWADCiFzYx4nzfwjeNQBxOA+FM7yLQGFe0PKx38k=

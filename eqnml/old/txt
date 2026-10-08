@@ -1,0 +1,16 @@
+hello world
+
+<eqn>
+matrix { 1 + 2 & 2 & 3 \\ 4 & 5 & 6 }
+</eqn>
+<math>blah blah</math>
+
+hello again
+<eqn>x</eqn>,
+<eqn>y</eqn>
+and
+<eqn>z</eqn>,
+and
+<eqn>matrix {</eqn>.
+
+again
